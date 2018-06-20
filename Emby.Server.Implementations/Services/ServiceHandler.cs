@@ -11,7 +11,7 @@ namespace Emby.Server.Implementations.Services
 {
     public class ServiceHandler
     {
-        protected static Task<object> CreateContentTypeRequest(HttpListenerHost host, IRequest httpReq, Type requestType, string contentType)
+        protected static object CreateContentTypeRequest(HttpListenerHost host, IRequest httpReq, Type requestType, string contentType)
         {
             if (!string.IsNullOrEmpty(contentType) && httpReq.ContentLength > 0)
             {
@@ -21,7 +21,7 @@ namespace Emby.Server.Implementations.Services
                     return deserializer(requestType, httpReq.InputStream);
                 }
             }
-            return Task.FromResult(host.CreateInstance(requestType)); 
+            return host.CreateInstance(requestType); 
         }
 
         public static RestPath FindMatchingRestPath(string httpMethod, string pathInfo, ILogger logger, out string contentType)
@@ -93,7 +93,9 @@ namespace Emby.Server.Implementations.Services
 
             appHost.ApplyRequestFilters(httpReq, httpRes, request);
 
-            var response = await appHost.ServiceController.Execute(appHost, request, httpReq).ConfigureAwait(false);
+            var rawResponse = await appHost.ServiceController.Execute(appHost, request, httpReq).ConfigureAwait(false);
+
+            var response = rawResponse;
 
             // Apply response filters
             foreach (var responseFilter in appHost.ResponseFilters)
@@ -121,10 +123,7 @@ namespace Emby.Server.Implementations.Services
             else
             {
                 var requestParams = await GetFlattenedRequestParams(httpReq).ConfigureAwait(false);
-
-                var requestDto = await CreateContentTypeRequest(host, httpReq, restPath.RequestType, httpReq.ContentType).ConfigureAwait(false);
-
-                return CreateRequest(httpReq, restPath, requestParams, requestDto);
+                return CreateRequest(host, httpReq, restPath, requestParams);
             }
         }
 
@@ -133,6 +132,13 @@ namespace Emby.Server.Implementations.Services
             var requiresRequestStreamTypeInfo = typeof(IRequiresRequestStream).GetTypeInfo();
 
             return requiresRequestStreamTypeInfo.IsAssignableFrom(requestType.GetTypeInfo());
+        }
+
+        public static object CreateRequest(HttpListenerHost host, IRequest httpReq, RestPath restPath, Dictionary<string, string> requestParams)
+        {
+            var requestDto = CreateContentTypeRequest(host, httpReq, restPath.RequestType, httpReq.ContentType);
+
+            return CreateRequest(httpReq, restPath, requestParams, requestDto);
         }
 
         public static object CreateRequest(IRequest httpReq, RestPath restPath, Dictionary<string, string> requestParams, object requestDto)

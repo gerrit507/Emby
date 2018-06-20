@@ -10,7 +10,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net.WebSockets;
 
 namespace Emby.Server.Implementations.Session
 {
@@ -68,13 +67,17 @@ namespace Emby.Server.Implementations.Session
 
         void connection_Closed(object sender, EventArgs e)
         {
-            var connection = (IWebSocketConnection)sender;
-            var sockets = Sockets.ToList();
-            sockets.Remove(connection);
-
-            Sockets = sockets;
-
-            _sessionManager.CloseIfNeeded(Session);
+            if (!GetActiveSockets().Any())
+            {
+                try
+                {
+                    _sessionManager.ReportSessionEnded(Session.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.ErrorException("Error reporting session ended.", ex);
+                }
+            }
         }
 
         public Task SendMessage<T>(string name, string messageId, T data, ISessionController[] allControllers, CancellationToken cancellationToken)
@@ -84,7 +87,7 @@ namespace Emby.Server.Implementations.Session
 
             if (socket == null)
             {
-                return Task.CompletedTask;
+                return Task.FromResult(true);
             }
 
             return socket.SendAsync(new WebSocketMessage<T>

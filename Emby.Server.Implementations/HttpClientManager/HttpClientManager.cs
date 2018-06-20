@@ -41,12 +41,13 @@ namespace Emby.Server.Implementations.HttpClientManager
         private readonly IApplicationPaths _appPaths;
 
         private readonly IFileSystem _fileSystem;
+        private readonly IMemoryStreamFactory _memoryStreamProvider;
         private readonly Func<string> _defaultUserAgentFn;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpClientManager" /> class.
         /// </summary>
-        public HttpClientManager(IApplicationPaths appPaths, ILogger logger, IFileSystem fileSystem, Func<string> defaultUserAgentFn)
+        public HttpClientManager(IApplicationPaths appPaths, ILogger logger, IFileSystem fileSystem, IMemoryStreamFactory memoryStreamProvider, Func<string> defaultUserAgentFn)
         {
             if (appPaths == null)
             {
@@ -59,6 +60,7 @@ namespace Emby.Server.Implementations.HttpClientManager
 
             _logger = logger;
             _fileSystem = fileSystem;
+            _memoryStreamProvider = memoryStreamProvider;
             _appPaths = appPaths;
             _defaultUserAgentFn = defaultUserAgentFn;
 
@@ -634,7 +636,7 @@ namespace Emby.Server.Implementations.HttpClientManager
                     {
                         using (var fs = _fileSystem.GetFileStream(tempFile, FileOpenMode.Create, FileAccessMode.Write, FileShareMode.Read, true))
                         {
-                            await httpResponse.GetResponseStream().CopyToAsync(fs, StreamDefaults.DefaultCopyToBufferSize, options.CancellationToken).ConfigureAwait(false);
+                            await StreamHelper.CopyToAsync(httpResponse.GetResponseStream(), fs, StreamDefaults.DefaultCopyToBufferSize, options.Progress, contentLength.Value, options.CancellationToken).ConfigureAwait(false);
                         }
                     }
 

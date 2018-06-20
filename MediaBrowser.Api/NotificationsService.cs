@@ -127,7 +127,7 @@ namespace MediaBrowser.Api
                 Level = request.Level,
                 Name = request.Name,
                 Url = request.Url,
-                UserIds = _userManager.Users.Where(i => i.Policy.IsAdministrator).Select(i => i.Id).ToArray()
+                UserIds = _userManager.Users.Where(i => i.Policy.IsAdministrator).Select(i => i.Id.ToString("N")).ToList()
             };
 
             return _notificationManager.SendNotification(notification, CancellationToken.None);
@@ -135,25 +135,24 @@ namespace MediaBrowser.Api
 
         public Task Post(MarkRead request)
         {
-            MarkRead(request.Ids, request.UserId, true);
+            return MarkRead(request.Ids, request.UserId, true);
         }
 
         public Task Post(MarkUnread request)
         {
-            MarkRead(request.Ids, request.UserId, false);
+            return MarkRead(request.Ids, request.UserId, false);
         }
 
-        private void MarkRead(string idList, string userId, bool read)
+        private Task MarkRead(string idList, string userId, bool read)
         {
             var ids = (idList ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
 
             if (ids.Length == 0)
             {
-                _notificationsRepo.MarkAllRead(userId, read, CancellationToken.None);
-                return;
+                return _notificationsRepo.MarkAllRead(userId, read, CancellationToken.None);
             }
 
-            _notificationsRepo.MarkRead(ids, userId, read, CancellationToken.None);
+            return _notificationsRepo.MarkRead(ids, userId, read, CancellationToken.None);
         }
 
         public object Get(GetNotifications request)

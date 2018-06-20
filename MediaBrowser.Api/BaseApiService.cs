@@ -55,7 +55,7 @@ namespace MediaBrowser.Api
             return Request.Headers[name];
         }
 
-        private static readonly string[] EmptyStringArray = Array.Empty<string>();
+        private static readonly string[] EmptyStringArray = new string[] { };
         public static string[] SplitValue(string value, char delim)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -64,12 +64,6 @@ namespace MediaBrowser.Api
             }
 
             return value.Split(new[] { delim }, StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        public static Guid[] GetGuids(string value)
-        {
-            // Unfortunately filtermenu.js was using |. This can be deprecated after a while.
-            return (value ?? string.Empty).Split(new[] { ',', '|' }, StringSplitOptions.RemoveEmptyEntries).Select(i => new Guid(i)).ToArray();
         }
 
         /// <summary>
@@ -81,17 +75,17 @@ namespace MediaBrowser.Api
         protected object ToOptimizedResult<T>(T result)
             where T : class
         {
-            return ResultFactory.GetResult(Request, result);
+            return ResultFactory.GetOptimizedResult(Request, result);
         }
 
-        protected void AssertCanUpdateUser(IAuthorizationContext authContext, IUserManager userManager, Guid userId, bool restrictUserPreferences)
+        protected void AssertCanUpdateUser(IAuthorizationContext authContext, IUserManager userManager, string userId, bool restrictUserPreferences)
         {
             var auth = authContext.GetAuthorizationInfo(Request);
 
             var authenticatedUser = userManager.GetUserById(auth.UserId);
 
             // If they're going to update the record of another user, they must be an administrator
-            if (!userId.Equals(auth.UserId))
+            if (!string.Equals(userId, auth.UserId, StringComparison.OrdinalIgnoreCase))
             {
                 if (!authenticatedUser.Policy.IsAdministrator)
                 {
@@ -105,6 +99,18 @@ namespace MediaBrowser.Api
                     throw new SecurityException("Unauthorized access.");
                 }
             }
+        }
+
+        /// <summary>
+        /// To the optimized serialized result using cache.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="result">The result.</param>
+        /// <returns>System.Object.</returns>
+        protected object ToOptimizedSerializedResultUsingCache<T>(T result)
+           where T : class
+        {
+            return ToOptimizedResult(result);
         }
 
         /// <summary>
@@ -127,37 +133,38 @@ namespace MediaBrowser.Api
         {
             var options = new DtoOptions();
 
+            var authInfo = authContext.GetAuthorizationInfo(Request);
+
+            options.DeviceId = authInfo.DeviceId;
+
             var hasFields = request as IHasItemFields;
             if (hasFields != null)
             {
                 options.Fields = hasFields.GetItemFields();
             }
 
-            if (!options.Fields.Contains(Model.Querying.ItemFields.RecursiveItemCount) || !options.Fields.Contains(Model.Querying.ItemFields.ChildCount))
+            var client = authInfo.Client ?? string.Empty;
+            if (client.IndexOf("kodi", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("wmc", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("media center", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("classic", StringComparison.OrdinalIgnoreCase) != -1)
             {
-                var client = authContext.GetAuthorizationInfo(Request).Client ?? string.Empty;
-                if (client.IndexOf("kodi", StringComparison.OrdinalIgnoreCase) != -1 ||
-                    client.IndexOf("wmc", StringComparison.OrdinalIgnoreCase) != -1 ||
-                    client.IndexOf("media center", StringComparison.OrdinalIgnoreCase) != -1 ||
-                    client.IndexOf("classic", StringComparison.OrdinalIgnoreCase) != -1)
-                {
-                    var list = options.Fields.ToList();
-                    list.Add(Model.Querying.ItemFields.RecursiveItemCount);
-                    options.Fields = list.ToArray(list.Count);
-                }
+                var list = options.Fields.ToList();
+                list.Add(Model.Querying.ItemFields.RecursiveItemCount);
+                options.Fields = list.ToArray(list.Count);
+            }
 
-                if (client.IndexOf("kodi", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("wmc", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("media center", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("classic", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("roku", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("samsung", StringComparison.OrdinalIgnoreCase) != -1 ||
-                   client.IndexOf("androidtv", StringComparison.OrdinalIgnoreCase) != -1)
-                {
-                    var list = options.Fields.ToList();
-                    list.Add(Model.Querying.ItemFields.ChildCount);
-                    options.Fields = list.ToArray(list.Count);
-                }
+            if (client.IndexOf("kodi", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("wmc", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("media center", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("classic", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("roku", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("samsung", StringComparison.OrdinalIgnoreCase) != -1 ||
+               client.IndexOf("androidtv", StringComparison.OrdinalIgnoreCase) != -1)
+            {
+                var list = options.Fields.ToList();
+                list.Add(Model.Querying.ItemFields.ChildCount);
+                options.Fields = list.ToArray(list.Count);
             }
 
             var hasDtoOptions = request as IHasDtoOptions;

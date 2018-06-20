@@ -140,7 +140,7 @@ namespace Emby.Server.Implementations.HttpServer.Security
                     var user = _connectManager.GetUserFromExchangeToken(token);
                     if (user != null)
                     {
-                        info.UserId = user.Id;
+                        info.UserId = user.Id.ToString("N");
                     }
                 }
                 httpReq.Items["OriginalAuthenticationInfo"] = tokenInfo;

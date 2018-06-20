@@ -102,7 +102,7 @@ namespace Emby.Server.Implementations.Localization
 
         private void LoadAdditionalRatings()
         {
-            LoadRatings("au", new[] {
+            LoadRatings("au", new List<ParentalRating> {
 
                 new ParentalRating("AU-G", 1),
                 new ParentalRating("AU-PG", 5),
@@ -114,7 +114,7 @@ namespace Emby.Server.Implementations.Localization
                 new ParentalRating("AU-RC", 11)
             });
 
-            LoadRatings("be", new[] {
+            LoadRatings("be", new List<ParentalRating> {
 
                 new ParentalRating("BE-AL", 1),
                 new ParentalRating("BE-MG6", 2),
@@ -124,7 +124,7 @@ namespace Emby.Server.Implementations.Localization
                 new ParentalRating("BE-16", 8)
             });
 
-            LoadRatings("de", new[] {
+            LoadRatings("de", new List<ParentalRating> {
 
                 new ParentalRating("DE-0", 1),
                 new ParentalRating("FSK-0", 1),
@@ -138,7 +138,7 @@ namespace Emby.Server.Implementations.Localization
                 new ParentalRating("FSK-18", 9)
             });
 
-            LoadRatings("ru", new [] {
+            LoadRatings("ru", new List<ParentalRating> {
 
                 new ParentalRating("RU-0+", 1),
                 new ParentalRating("RU-6+", 3),
@@ -148,7 +148,7 @@ namespace Emby.Server.Implementations.Localization
             });
         }
 
-        private void LoadRatings(string country, ParentalRating[] ratings)
+        private void LoadRatings(string country, List<ParentalRating> ratings)
         {
             _allParentalRatings[country] = ratings.ToDictionary(i => i.Name);
         }
@@ -216,17 +216,11 @@ namespace Emby.Server.Implementations.Localization
 
                             if (parts.Length == 5)
                             {
-                                var threeletterNames = new List<string> { parts[0] };
-                                if (!string.IsNullOrWhiteSpace(parts[1]))
-                                {
-                                    threeletterNames.Add(parts[1]);
-                                }
-
                                 list.Add(new CultureDto
                                 {
                                     DisplayName = parts[3],
                                     Name = parts[3],
-                                    ThreeLetterISOLanguageNames = threeletterNames.ToArray(),
+                                    ThreeLetterISOLanguageName = parts[0],
                                     TwoLetterISOLanguageName = parts[2]
                                 });
                             }
@@ -237,21 +231,12 @@ namespace Emby.Server.Implementations.Localization
 
             result = list.Where(i => !string.IsNullOrWhiteSpace(i.Name) &&
                !string.IsNullOrWhiteSpace(i.DisplayName) &&
-               i.ThreeLetterISOLanguageNames.Length > 0 &&
+               !string.IsNullOrWhiteSpace(i.ThreeLetterISOLanguageName) &&
                !string.IsNullOrWhiteSpace(i.TwoLetterISOLanguageName)).ToArray();
 
             _cultures = result;
 
             return result;
-        }
-
-        public CultureDto FindLanguageInfo(string language)
-        {
-            return GetCultures()
-                .FirstOrDefault(i => string.Equals(i.DisplayName, language, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(i.Name, language, StringComparison.OrdinalIgnoreCase) ||
-                i.ThreeLetterISOLanguageNames.Contains(language, StringComparer.OrdinalIgnoreCase) ||
-                string.Equals(i.TwoLetterISOLanguageName, language, StringComparison.OrdinalIgnoreCase));
         }
 
         /// <summary>

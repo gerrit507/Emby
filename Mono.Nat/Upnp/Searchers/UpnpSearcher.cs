@@ -46,6 +46,7 @@ namespace Mono.Nat
     internal class UpnpSearcher : ISearcher
     {
         public event EventHandler<DeviceEventArgs> DeviceFound;
+        public event EventHandler<DeviceEventArgs> DeviceLost;
 
         private DateTime nextSearch;
         private readonly ILogger _logger;

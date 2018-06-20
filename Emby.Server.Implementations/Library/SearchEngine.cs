@@ -31,11 +31,11 @@ namespace Emby.Server.Implementations.Library
             _logger = logManager.GetLogger("SearchEngine");
         }
 
-        public QueryResult<SearchHintInfo> GetSearchHints(SearchQuery query)
+        public async Task<QueryResult<SearchHintInfo>> GetSearchHints(SearchQuery query)
         {
             User user = null;
 
-            if (query.UserId.Equals(Guid.Empty))
+            if (string.IsNullOrEmpty(query.UserId))
             {
             }
             else
@@ -43,22 +43,26 @@ namespace Emby.Server.Implementations.Library
                 user = _userManager.GetUserById(query.UserId);
             }
 
-            var results = GetSearchHints(query, user);
-            var totalRecordCount = results.Count;
+            var results = await GetSearchHints(query, user).ConfigureAwait(false);
+
+            var searchResultArray = results.ToArray();
+            results = searchResultArray;
+
+            var count = searchResultArray.Length;
 
             if (query.StartIndex.HasValue)
             {
-                results = results.Skip(query.StartIndex.Value).ToList();
+                results = results.Skip(query.StartIndex.Value);
             }
 
             if (query.Limit.HasValue)
             {
-                results = results.Take(query.Limit.Value).ToList();
+                results = results.Take(query.Limit.Value);
             }
 
             return new QueryResult<SearchHintInfo>
             {
-                TotalRecordCount = totalRecordCount,
+                TotalRecordCount = count,
 
                 Items = results.ToArray()
             };
@@ -79,7 +83,7 @@ namespace Emby.Server.Implementations.Library
         /// <param name="user">The user.</param>
         /// <returns>IEnumerable{SearchHintResult}.</returns>
         /// <exception cref="System.ArgumentNullException">searchTerm</exception>
-        private List<SearchHintInfo> GetSearchHints(SearchQuery query, User user)
+        private Task<IEnumerable<SearchHintInfo>> GetSearchHints(SearchQuery query, User user)
         {
             var searchTerm = query.SearchTerm;
 
@@ -95,7 +99,7 @@ namespace Emby.Server.Implementations.Library
             var terms = GetWords(searchTerm);
 
             var excludeItemTypes = query.ExcludeItemTypes.ToList();
-            var includeItemTypes = (query.IncludeItemTypes ?? Array.Empty<string>()).ToList();
+            var includeItemTypes = (query.IncludeItemTypes ?? new string[] { }).ToList();
 
             excludeItemTypes.Add(typeof(Year).Name);
             excludeItemTypes.Add(typeof(Folder).Name);
@@ -169,8 +173,8 @@ namespace Emby.Server.Implementations.Library
                 IncludeItemTypes = includeItemTypes.ToArray(includeItemTypes.Count),
                 Limit = query.Limit,
                 IncludeItemsByName = string.IsNullOrEmpty(query.ParentId),
-                ParentId = string.IsNullOrEmpty(query.ParentId) ? Guid.Empty : new Guid(query.ParentId),
-                OrderBy = new[] { new ValueTuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending) },
+                ParentId = string.IsNullOrEmpty(query.ParentId) ? (Guid?)null : new Guid(query.ParentId),
+                OrderBy = new[] { new Tuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending) },
                 Recursive = true,
 
                 IsKids = query.IsKids,
@@ -196,13 +200,13 @@ namespace Emby.Server.Implementations.Library
 
             if (searchQuery.IncludeItemTypes.Length == 1 && string.Equals(searchQuery.IncludeItemTypes[0], "MusicArtist", StringComparison.OrdinalIgnoreCase))
             {
-                if (!searchQuery.ParentId.Equals(Guid.Empty))
+                if (searchQuery.ParentId.HasValue)
                 {
-                    searchQuery.AncestorIds = new[] { searchQuery.ParentId };
+                    searchQuery.AncestorIds = new Guid[] { searchQuery.ParentId.Value };
                 }
-                searchQuery.ParentId = Guid.Empty;
+                searchQuery.ParentId = null;
                 searchQuery.IncludeItemsByName = true;
-                searchQuery.IncludeItemTypes = Array.Empty<string>();
+                searchQuery.IncludeItemTypes = new string[] { };
                 mediaItems = _libraryManager.GetAllArtists(searchQuery).Items.Select(i => i.Item1).ToList();
             }
             else
@@ -220,10 +224,9 @@ namespace Emby.Server.Implementations.Library
             {
                 Item = i.Item1,
                 MatchedTerm = i.Item2
+            });
 
-            }).ToList();
-
-            return returnValue;
+            return Task.FromResult(returnValue);
         }
 
         /// <summary>

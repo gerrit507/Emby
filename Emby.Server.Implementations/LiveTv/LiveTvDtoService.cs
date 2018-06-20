@@ -15,7 +15,6 @@ using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Extensions;
-using System.Collections.Generic;
 
 namespace Emby.Server.Implementations.LiveTv
 {
@@ -41,15 +40,15 @@ namespace Emby.Server.Implementations.LiveTv
         {
             var dto = new TimerInfoDto
             {
-                Id = GetInternalTimerId(info.Id),
+                Id = GetInternalTimerId(service.Name, info.Id).ToString("N"),
                 Overview = info.Overview,
                 EndDate = info.EndDate,
                 Name = info.Name,
                 StartDate = info.StartDate,
                 ExternalId = info.Id,
-                ChannelId = GetInternalChannelId(service.Name, info.ChannelId),
+                ChannelId = GetInternalChannelId(service.Name, info.ChannelId).ToString("N"),
                 Status = info.Status,
-                SeriesTimerId = string.IsNullOrEmpty(info.SeriesTimerId) ? null : GetInternalSeriesTimerId(info.SeriesTimerId).ToString("N"),
+                SeriesTimerId = string.IsNullOrEmpty(info.SeriesTimerId) ? null : GetInternalSeriesTimerId(service.Name, info.SeriesTimerId).ToString("N"),
                 PrePaddingSeconds = info.PrePaddingSeconds,
                 PostPaddingSeconds = info.PostPaddingSeconds,
                 IsPostPaddingRequired = info.IsPostPaddingRequired,
@@ -66,7 +65,7 @@ namespace Emby.Server.Implementations.LiveTv
 
             if (!string.IsNullOrEmpty(info.ProgramId))
             {
-                dto.ProgramId = GetInternalProgramId(info.ProgramId).ToString("N");
+                dto.ProgramId = GetInternalProgramId(service.Name, info.ProgramId).ToString("N");
             }
 
             if (program != null)
@@ -104,7 +103,7 @@ namespace Emby.Server.Implementations.LiveTv
         {
             var dto = new SeriesTimerInfoDto
             {
-                Id = GetInternalSeriesTimerId(info.Id).ToString("N"),
+                Id = GetInternalSeriesTimerId(service.Name, info.Id).ToString("N"),
                 Overview = info.Overview,
                 EndDate = info.EndDate,
                 Name = info.Name,
@@ -131,12 +130,12 @@ namespace Emby.Server.Implementations.LiveTv
 
             if (!string.IsNullOrEmpty(info.ChannelId))
             {
-                dto.ChannelId = GetInternalChannelId(service.Name, info.ChannelId);
+                dto.ChannelId = GetInternalChannelId(service.Name, info.ChannelId).ToString("N");
             }
 
             if (!string.IsNullOrEmpty(info.ProgramId))
             {
-                dto.ProgramId = GetInternalProgramId(info.ProgramId).ToString("N");
+                dto.ProgramId = GetInternalProgramId(service.Name, info.ProgramId).ToString("N");
             }
 
             dto.DayPattern = info.Days == null ? null : GetDayPattern(info.Days.ToArray(info.Days.Count));
@@ -189,47 +188,49 @@ namespace Emby.Server.Implementations.LiveTv
                 }
             }
 
-            var program = _libraryManager.GetItemList(new InternalItemsQuery
+            if (!string.IsNullOrEmpty(programSeriesId))
             {
-                IncludeItemTypes = new string[] { typeof(LiveTvProgram).Name },
-                ExternalSeriesId = programSeriesId,
-                Limit = 1,
-                ImageTypes = new ImageType[] { ImageType.Primary },
-                DtoOptions = new DtoOptions(false),
-                Name = string.IsNullOrEmpty(programSeriesId) ? seriesName : null
-
-            }).FirstOrDefault();
-
-            if (program != null)
-            {
-                var image = program.GetImageInfo(ImageType.Primary, 0);
-                if (image != null)
+                var program = _libraryManager.GetItemList(new InternalItemsQuery
                 {
-                    try
-                    {
-                        dto.ParentPrimaryImageTag = _imageProcessor.GetImageCacheTag(program, image);
-                        dto.ParentPrimaryImageItemId = program.Id.ToString("N");
-                    }
-                    catch (Exception ex)
-                    {
-                    }
-                }
+                    IncludeItemTypes = new string[] { typeof(LiveTvProgram).Name },
+                    ExternalSeriesId = programSeriesId,
+                    Limit = 1,
+                    ImageTypes = new ImageType[] { ImageType.Primary },
+                    DtoOptions = new DtoOptions(false)
 
-                if (dto.ParentBackdropImageTags == null || dto.ParentBackdropImageTags.Length == 0)
+                }).FirstOrDefault();
+
+                if (program != null)
                 {
-                    image = program.GetImageInfo(ImageType.Backdrop, 0);
+                    var image = program.GetImageInfo(ImageType.Primary, 0);
                     if (image != null)
                     {
                         try
                         {
-                            dto.ParentBackdropImageTags = new string[]
-                        {
-                                _imageProcessor.GetImageCacheTag(program, image)
-                        };
-                            dto.ParentBackdropItemId = program.Id.ToString("N");
+                            dto.ParentPrimaryImageTag = _imageProcessor.GetImageCacheTag(program, image);
+                            dto.ParentPrimaryImageItemId = program.Id.ToString("N");
                         }
                         catch (Exception ex)
                         {
+                        }
+                    }
+
+                    if (dto.ParentBackdropImageTags == null || dto.ParentBackdropImageTags.Length == 0)
+                    {
+                        image = program.GetImageInfo(ImageType.Backdrop, 0);
+                        if (image != null)
+                        {
+                            try
+                            {
+                                dto.ParentBackdropImageTags = new string[]
+                            {
+                                _imageProcessor.GetImageCacheTag(program, image)
+                            };
+                                dto.ParentBackdropItemId = program.Id.ToString("N");
+                            }
+                            catch (Exception ex)
+                            {
+                            }
                         }
                     }
                 }
@@ -279,60 +280,57 @@ namespace Emby.Server.Implementations.LiveTv
                 }
             }
 
-            var program = _libraryManager.GetItemList(new InternalItemsQuery
+            if (!string.IsNullOrEmpty(programSeriesId))
             {
-                IncludeItemTypes = new string[] { typeof(Series).Name },
-                Name = seriesName,
-                Limit = 1,
-                ImageTypes = new ImageType[] { ImageType.Primary },
-                DtoOptions = new DtoOptions(false)
+                var program = _libraryManager.GetItemList(new InternalItemsQuery
+                {
+                    IncludeItemTypes = new string[] { typeof(Series).Name },
+                    Name = seriesName,
+                    Limit = 1,
+                    ImageTypes = new ImageType[] { ImageType.Primary },
+                    DtoOptions = new DtoOptions(false)
 
-            }).FirstOrDefault();
-
-            if (program == null)
-            {
-                program = _libraryManager.GetItemList(new InternalItemsQuery
+                }).FirstOrDefault() ?? _libraryManager.GetItemList(new InternalItemsQuery
                 {
                     IncludeItemTypes = new string[] { typeof(LiveTvProgram).Name },
                     ExternalSeriesId = programSeriesId,
                     Limit = 1,
                     ImageTypes = new ImageType[] { ImageType.Primary },
-                    DtoOptions = new DtoOptions(false),
-                    Name = string.IsNullOrEmpty(programSeriesId) ? seriesName : null
+                    DtoOptions = new DtoOptions(false)
 
                 }).FirstOrDefault();
-            }
 
-            if (program != null)
-            {
-                var image = program.GetImageInfo(ImageType.Primary, 0);
-                if (image != null)
+                if (program != null)
                 {
-                    try
-                    {
-                        dto.ParentPrimaryImageTag = _imageProcessor.GetImageCacheTag(program, image);
-                        dto.ParentPrimaryImageItemId = program.Id.ToString("N");
-                    }
-                    catch (Exception ex)
-                    {
-                    }
-                }
-
-                if (dto.ParentBackdropImageTags == null || dto.ParentBackdropImageTags.Length == 0)
-                {
-                    image = program.GetImageInfo(ImageType.Backdrop, 0);
+                    var image = program.GetImageInfo(ImageType.Primary, 0);
                     if (image != null)
                     {
                         try
                         {
-                            dto.ParentBackdropImageTags = new string[]
-                        {
-                                _imageProcessor.GetImageCacheTag(program, image)
-                        };
-                            dto.ParentBackdropItemId = program.Id.ToString("N");
+                            dto.ParentPrimaryImageTag = _imageProcessor.GetImageCacheTag(program, image);
+                            dto.ParentPrimaryImageItemId = program.Id.ToString("N");
                         }
                         catch (Exception ex)
                         {
+                        }
+                    }
+
+                    if (dto.ParentBackdropImageTags == null || dto.ParentBackdropImageTags.Length == 0)
+                    {
+                        image = program.GetImageInfo(ImageType.Backdrop, 0);
+                        if (image != null)
+                        {
+                            try
+                            {
+                                dto.ParentBackdropImageTags = new string[]
+                            {
+                                _imageProcessor.GetImageCacheTag(program, image)
+                            };
+                                dto.ParentBackdropItemId = program.Id.ToString("N");
+                            }
+                            catch (Exception ex)
+                            {
+                            }
                         }
                     }
                 }
@@ -368,6 +366,29 @@ namespace Emby.Server.Implementations.LiveTv
             return pattern;
         }
 
+        public LiveTvTunerInfoDto GetTunerInfoDto(string serviceName, LiveTvTunerInfo info, string channelName)
+        {
+            var dto = new LiveTvTunerInfoDto
+            {
+                Name = info.Name,
+                Id = info.Id,
+                Clients = info.Clients.ToArray(),
+                ProgramName = info.ProgramName,
+                SourceType = info.SourceType,
+                Status = info.Status,
+                ChannelName = channelName,
+                Url = info.Url,
+                CanReset = info.CanReset
+            };
+
+            if (!string.IsNullOrEmpty(info.ChannelId))
+            {
+                dto.ChannelId = GetInternalChannelId(serviceName, info.ChannelId).ToString("N");
+            }
+
+            return dto;
+        }
+
         internal string GetImageTag(BaseItem info)
         {
             try
@@ -391,24 +412,23 @@ namespace Emby.Server.Implementations.LiveTv
             return _libraryManager.GetNewItemId(name.ToLower(), typeof(LiveTvChannel));
         }
 
-        private const string ServiceName = "Emby";
-        public string GetInternalTimerId(string externalId)
+        public Guid GetInternalTimerId(string serviceName, string externalId)
         {
-            var name = ServiceName + externalId + InternalVersionNumber;
-
-            return name.ToLower().GetMD5().ToString("N");
-        }
-
-        public Guid GetInternalSeriesTimerId(string externalId)
-        {
-            var name = ServiceName + externalId + InternalVersionNumber;
+            var name = serviceName + externalId + InternalVersionNumber;
 
             return name.ToLower().GetMD5();
         }
 
-        public Guid GetInternalProgramId(string externalId)
+        public Guid GetInternalSeriesTimerId(string serviceName, string externalId)
         {
-            var name = ServiceName + externalId + InternalVersionNumber;
+            var name = serviceName + externalId + InternalVersionNumber;
+
+            return name.ToLower().GetMD5();
+        }
+
+        public Guid GetInternalProgramId(string serviceName, string externalId)
+        {
+            var name = serviceName + externalId + InternalVersionNumber;
 
             return _libraryManager.GetNewItemId(name.ToLower(), typeof(LiveTvProgram));
         }
@@ -442,7 +462,7 @@ namespace Emby.Server.Implementations.LiveTv
                 info.Id = timer.ExternalId;
             }
 
-            if (!dto.ChannelId.Equals(Guid.Empty) && string.IsNullOrEmpty(info.ChannelId))
+            if (!string.IsNullOrEmpty(dto.ChannelId) && string.IsNullOrEmpty(info.ChannelId))
             {
                 var channel = _libraryManager.GetItemById(dto.ChannelId);
 
@@ -508,7 +528,7 @@ namespace Emby.Server.Implementations.LiveTv
                 info.Id = timer.ExternalId;
             }
 
-            if (!dto.ChannelId.Equals(Guid.Empty) && string.IsNullOrEmpty(info.ChannelId))
+            if (!string.IsNullOrEmpty(dto.ChannelId) && string.IsNullOrEmpty(info.ChannelId))
             {
                 var channel = _libraryManager.GetItemById(dto.ChannelId);
 

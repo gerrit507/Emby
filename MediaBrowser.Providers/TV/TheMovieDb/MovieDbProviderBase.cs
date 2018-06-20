@@ -72,7 +72,7 @@ namespace MediaBrowser.Providers.TV
                 // If it's recent or automatic updates are enabled, don't re-download
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 3)
                 {
-                    return Task.CompletedTask;
+                    return Task.FromResult(true);
                 }
             }
 
@@ -135,7 +135,7 @@ namespace MediaBrowser.Providers.TV
             {
                 using (var json = response.Content)
                 {
-                    return await _jsonSerializer.DeserializeFromStreamAsync<RootObject>(json).ConfigureAwait(false);
+                    return _jsonSerializer.DeserializeFromStream<RootObject>(json);
                 }
             }
         }

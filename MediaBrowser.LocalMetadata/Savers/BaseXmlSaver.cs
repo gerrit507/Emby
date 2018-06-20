@@ -29,6 +29,92 @@ namespace MediaBrowser.LocalMetadata.Savers
     {
         private static readonly CultureInfo UsCulture = new CultureInfo("en-US");
 
+        private static readonly Dictionary<string, string> CommonTags = new[] {
+
+                    "Added",
+                    "AspectRatio",
+                    "AudioDbAlbumId",
+                    "AudioDbArtistId",
+                    "BirthDate",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "certification",
+
+                    "Chapters",
+                    "ContentRating",
+                    "Countries",
+                    "CustomRating",
+                    "CriticRating",
+                    "DeathDate",
+                    "DisplayOrder",
+                    "EndDate",
+                    "Genres",
+                    "Genre",
+                    "GamesDbId",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "IMDB_ID",
+
+                    "IMDB",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "IMDbId",
+
+                    "Language",
+                    "LocalTitle",
+                    "OriginalTitle",
+                    "LockData",
+                    "LockedFields",
+                    "Format3D",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "MPAARating",
+
+                    "MusicBrainzArtistId",
+                    "MusicBrainzAlbumArtistId",
+                    "MusicBrainzAlbumId",
+                    "MusicBrainzReleaseGroupId",
+
+                    // Deprecated. No longer saving in this field.
+                    "MusicbrainzId",
+
+                    "Overview",
+                    "Persons",
+                    "PremiereDate",
+                    "ProductionYear",
+                    "Rating",
+                    "RottenTomatoesId",
+                    "RunningTime",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "Runtime",
+
+                    "SortTitle",
+                    "Studios",
+                    "Tags",
+                    
+                    // Deprecated. No longer saving in this field.
+                    "TagLine",
+
+                    "Taglines",
+                    "TMDbCollectionId",
+                    "TMDbId",
+
+                    // Deprecated. No longer saving in this field.
+                    "Trailer",
+
+                    "Trailers",
+                    "TVcomId",
+                    "TvDbId",
+                    "TVRageId",
+                    "Website",
+                    "Zap2ItId",
+                    "CollectionItems",
+                    "PlaylistItems",
+                    "Shares"
+
+        }.ToDictionary(i => i, StringComparer.OrdinalIgnoreCase);
+
         public BaseXmlSaver(IFileSystem fileSystem, IServerConfigurationManager configurationManager, ILibraryManager libraryManager, IUserManager userManager, IUserDataManager userDataManager, ILogger logger, IXmlReaderSettingsFactory xmlReaderSettingsFactory)
         {
             FileSystem = fileSystem;
@@ -94,6 +180,11 @@ namespace MediaBrowser.LocalMetadata.Savers
         /// <returns><c>true</c> if [is enabled for] [the specified item]; otherwise, <c>false</c>.</returns>
         public abstract bool IsEnabledFor(BaseItem item, ItemUpdateType updateType);
 
+        protected virtual List<string> GetTagsUsed()
+        {
+            return new List<string>();
+        }
+
         public void Save(BaseItem item, CancellationToken cancellationToken)
         {
             var path = GetSavePath(item);
@@ -113,15 +204,27 @@ namespace MediaBrowser.LocalMetadata.Savers
         private void SaveToFile(Stream stream, string path)
         {
             FileSystem.CreateDirectory(FileSystem.GetDirectoryName(path));
-            // On Windows, savint the file will fail if the file is hidden or readonly
-            FileSystem.SetAttributes(path, false, false);
+
+            var file = FileSystem.GetFileInfo(path);
+
+            var wasHidden = false;
+
+            // This will fail if the file is hidden
+            if (file.Exists)
+            {
+                if (file.IsHidden)
+                {
+                    wasHidden = true;
+                }
+                FileSystem.SetAttributes(path, false, false);
+            }
 
             using (var filestream = FileSystem.GetFileStream(path, FileOpenMode.Create, FileAccessMode.Write, FileShareMode.Read))
             {
                 stream.CopyTo(filestream);
             }
 
-            if (ConfigurationManager.Configuration.SaveMetadataHidden)
+            if (wasHidden || ConfigurationManager.Configuration.SaveMetadataHidden)
             {
                 SetHidden(path, true);
             }
@@ -164,6 +267,25 @@ namespace MediaBrowser.LocalMetadata.Savers
                 }
 
                 WriteCustomElements(item, writer);
+
+                var tagsUsed = GetTagsUsed();
+
+                try
+                {
+                    AddCustomTags(xmlPath, tagsUsed, writer, Logger, FileSystem);
+                }
+                catch (FileNotFoundException)
+                {
+
+                }
+                catch (IOException)
+                {
+
+                }
+                catch (XmlException ex)
+                {
+                    Logger.ErrorException("Error reading existng xml", ex);
+                }
 
                 writer.WriteEndElement();
 
@@ -295,6 +417,11 @@ namespace MediaBrowser.LocalMetadata.Savers
                 writer.WriteElementString("ProductionYear", item.ProductionYear.Value.ToString(UsCulture));
             }
 
+            if (!string.IsNullOrEmpty(item.HomePageUrl))
+            {
+                writer.WriteElementString("Website", item.HomePageUrl);
+            }
+
             var hasAspectRatio = item as IHasAspectRatio;
             if (hasAspectRatio != null)
             {
@@ -320,7 +447,7 @@ namespace MediaBrowser.LocalMetadata.Savers
             {
                 var timespan = TimeSpan.FromTicks(runTimeTicks.Value);
 
-                writer.WriteElementString("RunningTime", Math.Floor(timespan.TotalMinutes).ToString(UsCulture));
+                writer.WriteElementString("RunningTime", Convert.ToInt32(timespan.TotalMinutes).ToString(UsCulture));
             }
 
             if (item.ProviderIds != null)
@@ -342,7 +469,7 @@ namespace MediaBrowser.LocalMetadata.Savers
                 writer.WriteEndElement();
             }
 
-            if (item.Genres.Length > 0)
+            if (item.Genres.Count > 0)
             {
                 writer.WriteStartElement("Genres");
 
@@ -513,6 +640,59 @@ namespace MediaBrowser.LocalMetadata.Savers
         private bool IsPersonType(PersonInfo person, string type)
         {
             return string.Equals(person.Type, type, StringComparison.OrdinalIgnoreCase) || string.Equals(person.Role, type, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void AddCustomTags(string path, List<string> xmlTagsUsed, XmlWriter writer, ILogger logger, IFileSystem fileSystem)
+        {
+            var settings = XmlReaderSettingsFactory.Create(false);
+
+            settings.CheckCharacters = false;
+            settings.IgnoreProcessingInstructions = true;
+            settings.IgnoreComments = true;
+
+            using (var fileStream = fileSystem.OpenRead(path))
+            {
+                using (var streamReader = new StreamReader(fileStream, Encoding.UTF8))
+                {
+                    // Use XmlReader for best performance
+                    using (var reader = XmlReader.Create(streamReader, settings))
+                    {
+                        try
+                        {
+                            reader.MoveToContent();
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.ErrorException("Error reading existing xml tags from {0}.", ex, path);
+                            return;
+                        }
+
+                        reader.Read();
+
+                        // Loop through each element
+                        while (!reader.EOF && reader.ReadState == ReadState.Interactive)
+                        {
+                            if (reader.NodeType == XmlNodeType.Element)
+                            {
+                                var name = reader.Name;
+
+                                if (!CommonTags.ContainsKey(name) && !xmlTagsUsed.Contains(name, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    writer.WriteNode(reader, false);
+                                }
+                                else
+                                {
+                                    reader.Skip();
+                                }
+                            }
+                            else
+                            {
+                                reader.Read();
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

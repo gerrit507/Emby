@@ -37,7 +37,7 @@ namespace MediaBrowser.Api
     public class UpdateItemContentType : IReturnVoid
     {
         [ApiMember(Name = "ItemId", Description = "The id of the item", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
-        public Guid ItemId { get; set; }
+        public string ItemId { get; set; }
 
         [ApiMember(Name = "ContentType", Description = "The content type of the item", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "POST")]
         public string ContentType { get; set; }
@@ -255,6 +255,7 @@ namespace MediaBrowser.Api
             item.CriticRating = request.CriticRating;
 
             item.CommunityRating = request.CommunityRating;
+            item.HomePageUrl = request.HomePageUrl;
             item.IndexNumber = request.IndexNumber;
             item.ParentIndexNumber = request.ParentIndexNumber;
             item.Overview = request.Overview;
@@ -263,9 +264,12 @@ namespace MediaBrowser.Api
             var episode = item as Episode;
             if (episode != null)
             {
+                episode.DvdSeasonNumber = request.DvdSeasonNumber;
+                episode.DvdEpisodeNumber = request.DvdEpisodeNumber;
                 episode.AirsAfterSeasonNumber = request.AirsAfterSeasonNumber;
                 episode.AirsBeforeEpisodeNumber = request.AirsBeforeEpisodeNumber;
                 episode.AirsBeforeSeasonNumber = request.AirsBeforeSeasonNumber;
+                episode.AbsoluteEpisodeNumber = request.AbsoluteEpisodeNumber;
             }
 
             item.Tags = request.Tags;

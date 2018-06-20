@@ -415,14 +415,15 @@ namespace Emby.Server.Implementations.Library.Resolvers.Movies
                     Set3DFormat(movie);
                     return movie;
                 }
-                else if (supportPhotos && PhotoResolver.IsImageFile(child.FullName, _imageProcessor))
+                else if (supportPhotos && !child.IsHidden && PhotoResolver.IsImageFile(child.FullName, _imageProcessor))
                 {
                     photos.Add(child);
                 }
             }
 
             // TODO: Allow GetMultiDiscMovie in here
-            var supportsMultiVersion = true;
+            var supportsMultiVersion = !string.Equals(collectionType, CollectionType.HomeVideos) &&
+                                    !string.Equals(collectionType, CollectionType.Photos);
 
             var result = ResolveVideos<T>(parent, fileSystemEntries, directoryService, supportsMultiVersion, collectionType, parseName) ??
                 new MultiItemResolverResult();

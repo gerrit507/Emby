@@ -105,8 +105,8 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
             //OpenedMediaSource.Path = tempFile;
             //OpenedMediaSource.ReadAtNativeFramerate = true;
 
-            MediaSource.Path = _appHost.GetLocalApiUrl("127.0.0.1") + "/LiveTv/LiveStreamFiles/" + UniqueId + "/stream.ts";
-            MediaSource.Protocol = MediaProtocol.Http;
+            OpenedMediaSource.Path = _appHost.GetLocalApiUrl("127.0.0.1") + "/LiveTv/LiveStreamFiles/" + UniqueId + "/stream.ts";
+            OpenedMediaSource.Protocol = MediaProtocol.Http;
 
             //OpenedMediaSource.Path = TempFilePath;
             //OpenedMediaSource.Protocol = MediaProtocol.File;
@@ -133,7 +133,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
 
                             using (var fileStream = FileSystem.GetFileStream(TempFilePath, FileOpenMode.Create, FileAccessMode.Write, FileShareMode.Read, FileOpenOptions.None))
                             {
-                                await ApplicationHost.StreamHelper.CopyToAsync(stream, fileStream, 81920, () => Resolve(openTaskCompletionSource), cancellationToken).ConfigureAwait(false);
+                                StreamHelper.CopyTo(stream, fileStream, 81920, () => Resolve(openTaskCompletionSource), cancellationToken);
                             }
                         }
                     }

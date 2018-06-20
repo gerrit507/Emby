@@ -4,6 +4,7 @@ using MediaBrowser.Model.Logging;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Net;
+using MediaBrowser.Model.Threading;
 using System.Threading;
 
 namespace MediaBrowser.Api.System
@@ -27,7 +28,7 @@ namespace MediaBrowser.Api.System
         /// </summary>
         private readonly IActivityManager _activityManager;
 
-        public ActivityLogWebSocketListener(ILogger logger, IActivityManager activityManager) : base(logger)
+        public ActivityLogWebSocketListener(ILogger logger, ITimerFactory timerFactory, IActivityManager activityManager) : base(logger, timerFactory)
         {
             _activityManager = activityManager;
             _activityManager.EntryCreated += _activityManager_EntryCreated;
@@ -47,7 +48,14 @@ namespace MediaBrowser.Api.System
         {
             return Task.FromResult(new List<ActivityLogEntry>());
         }
-        
+
+        protected override bool SendOnTimer
+        {
+            get
+            {
+                return false;
+            }
+        }
 
         protected override void Dispose(bool dispose)
         {

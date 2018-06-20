@@ -51,6 +51,7 @@ namespace Emby.Server.Implementations.Channels
         private readonly IProviderManager _providerManager;
 
         private readonly ILocalizationManager _localization;
+        private readonly ConcurrentDictionary<Guid, bool> _refreshedItems = new ConcurrentDictionary<Guid, bool>();
 
         public ChannelManager(IUserManager userManager, IDtoService dtoService, ILibraryManager libraryManager, ILogger logger, IServerConfigurationManager config, IFileSystem fileSystem, IUserDataManager userDataManager, IJsonSerializer jsonSerializer, ILocalizationManager localization, IHttpClient httpClient, IProviderManager providerManager)
         {
@@ -108,11 +109,6 @@ namespace Emby.Server.Implementations.Channels
         public Task DeleteItem(BaseItem item)
         {
             var internalChannel = _libraryManager.GetItemById(item.ChannelId);
-            if (internalChannel == null)
-            {
-                throw new ArgumentException();
-            }
-
             var channel = Channels.FirstOrDefault(i => GetInternalChannelId(i.Name).Equals(internalChannel.Id));
 
             var supportsDelete = channel as ISupportsDelete;
@@ -138,7 +134,7 @@ namespace Emby.Server.Implementations.Channels
 
         public QueryResult<Channel> GetChannelsInternal(ChannelQuery query)
         {
-            var user = query.UserId.Equals(Guid.Empty)
+            var user = string.IsNullOrEmpty(query.UserId)
                 ? null
                 : _userManager.GetUserById(query.UserId);
 
@@ -259,7 +255,7 @@ namespace Emby.Server.Implementations.Channels
 
         public QueryResult<BaseItemDto> GetChannels(ChannelQuery query)
         {
-            var user = query.UserId.Equals(Guid.Empty)
+            var user = string.IsNullOrEmpty(query.UserId)
                 ? null
                 : _userManager.GetUserById(query.UserId);
 
@@ -282,6 +278,8 @@ namespace Emby.Server.Implementations.Channels
 
         public async Task RefreshChannels(IProgress<double> progress, CancellationToken cancellationToken)
         {
+            _refreshedItems.Clear();
+
             var allChannelsList = GetAllChannels().ToList();
 
             var numComplete = 0;
@@ -431,6 +429,7 @@ namespace Emby.Server.Implementations.Channels
             var parentFolderId = Guid.Empty;
 
             var id = GetInternalChannelId(channelInfo.Name);
+            var idString = id.ToString("N");
 
             var path = Channel.GetInternalMetadataPath(_config.ApplicationPaths.InternalMetadataPath, id);
 
@@ -458,11 +457,11 @@ namespace Emby.Server.Implementations.Channels
             }
             item.Path = path;
 
-            if (!item.ChannelId.Equals(id))
+            if (!string.Equals(item.ChannelId, idString, StringComparison.OrdinalIgnoreCase))
             {
                 forceUpdate = true;
             }
-            item.ChannelId = id;
+            item.ChannelId = idString;
 
             if (item.ParentId != parentFolderId)
             {
@@ -472,6 +471,7 @@ namespace Emby.Server.Implementations.Channels
 
             item.OfficialRating = GetOfficialRating(channelInfo.ParentalRating);
             item.Overview = channelInfo.Description;
+            item.HomePageUrl = channelInfo.HomePageUrl;
 
             if (string.IsNullOrWhiteSpace(item.Name))
             {
@@ -481,7 +481,7 @@ namespace Emby.Server.Implementations.Channels
             if (isNew)
             {
                 item.OnMetadataChanged();
-                _libraryManager.CreateItem(item, null);
+                _libraryManager.CreateItem(item);
             }
 
             await item.RefreshMetadata(new MetadataRefreshOptions(_fileSystem)
@@ -525,7 +525,7 @@ namespace Emby.Server.Implementations.Channels
             return _libraryManager.GetItemIds(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { typeof(Channel).Name },
-                OrderBy = new ValueTuple<string, SortOrder>[] { new ValueTuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending) }
+                OrderBy = new Tuple<string, SortOrder>[] { new Tuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending) }
 
             }).Select(i => GetChannelFeatures(i.ToString("N"))).ToArray();
         }
@@ -543,10 +543,15 @@ namespace Emby.Server.Implementations.Channels
             return GetChannelFeaturesDto(channel, channelProvider, channelProvider.GetChannelFeatures());
         }
 
-        public bool SupportsSync(Guid channelId)
+        public bool SupportsSync(string channelId)
         {
+            if (string.IsNullOrEmpty(channelId))
+            {
+                throw new ArgumentNullException("channelId");
+            }
+
             //var channel = GetChannel(channelId);
-            var channelProvider = GetChannelProvider(channelId.ToString("N"));
+            var channelProvider = GetChannelProvider(channelId);
 
             return channelProvider.GetChannelFeatures().SupportsContentDownloading;
         }
@@ -631,18 +636,18 @@ namespace Emby.Server.Implementations.Channels
 
             if (sortByPremiereDate)
             {
-                query.OrderBy = new []
+                query.OrderBy = new Tuple<string, SortOrder>[]
                 {
-                    new ValueTuple<string, SortOrder>(ItemSortBy.PremiereDate, SortOrder.Descending),
-                    new ValueTuple<string, SortOrder>(ItemSortBy.ProductionYear, SortOrder.Descending),
-                    new ValueTuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending)
+                    new Tuple<string, SortOrder>(ItemSortBy.PremiereDate, SortOrder.Descending),
+                    new Tuple<string, SortOrder>(ItemSortBy.ProductionYear, SortOrder.Descending),
+                    new Tuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending)
                 };
             }
             else
             {
-                query.OrderBy = new []
+                query.OrderBy = new Tuple<string, SortOrder>[]
                 {
-                    new ValueTuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending)
+                    new Tuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending)
                 };
             }
 
@@ -690,7 +695,7 @@ namespace Emby.Server.Implementations.Channels
             ChannelItemSortField? sortField = null;
             var sortDescending = false;
 
-            var parentItem = !query.ParentId.Equals(Guid.Empty) ? _libraryManager.GetItemById(query.ParentId) : channel;
+            var parentItem = query.ParentId.HasValue ? _libraryManager.GetItemById(query.ParentId.Value) : channel;
 
             var itemsResult = await GetChannelItems(channelProvider,
                 user,
@@ -700,11 +705,11 @@ namespace Emby.Server.Implementations.Channels
                 cancellationToken)
                 .ConfigureAwait(false);
 
-            if (query.ParentId.Equals(Guid.Empty))
+            if (!query.ParentId.HasValue)
             {
                 query.Parent = channel;
             }
-            query.ChannelIds = Array.Empty<Guid>();
+            query.ChannelIds = new Guid[] { };
 
             // Not yet sure why this is causing a problem
             query.GroupByPresentationUniqueKey = false;
@@ -715,7 +720,7 @@ namespace Emby.Server.Implementations.Channels
             if (itemsResult != null)
             {
                 var internalItems = itemsResult.Items
-                    .Select(i => GetChannelItemEntity(i, channelProvider, channel.Id, parentItem, cancellationToken))
+                    .Select(i => GetChannelItemEntity(i, channelProvider, channel.Id, parentItem.Id, cancellationToken))
                     .ToArray();
 
                 var existingIds = _libraryManager.GetItemIds(query);
@@ -814,7 +819,7 @@ namespace Emby.Server.Implementations.Channels
 
                 var query = new InternalChannelItemQuery
                 {
-                    UserId = user == null ? Guid.Empty : user.Id,
+                    UserId = userId,
                     SortBy = sortField,
                     SortDescending = sortDescending,
                     FolderId = externalFolderId
@@ -929,10 +934,8 @@ namespace Emby.Server.Implementations.Channels
             return item;
         }
 
-        private BaseItem GetChannelItemEntity(ChannelItemInfo info, IChannel channelProvider, Guid internalChannelId, BaseItem parentFolder, CancellationToken cancellationToken)
+        private BaseItem GetChannelItemEntity(ChannelItemInfo info, IChannel channelProvider, Guid internalChannelId, Guid parentFolderId, CancellationToken cancellationToken)
         {
-            var parentFolderId = parentFolder.Id;
-
             BaseItem item;
             bool isNew;
             bool forceUpdate = false;
@@ -1010,7 +1013,7 @@ namespace Emby.Server.Implementations.Channels
             if (isNew)
             {
                 item.Name = info.Name;
-                item.Genres = info.Genres.ToArray();
+                item.Genres = info.Genres;
                 item.Studios = info.Studios.ToArray(info.Studios.Count);
                 item.CommunityRating = info.CommunityRating;
                 item.Overview = info.Overview;
@@ -1022,6 +1025,7 @@ namespace Emby.Server.Implementations.Channels
                 item.OfficialRating = info.OfficialRating;
                 item.DateCreated = info.DateCreated ?? DateTime.UtcNow;
                 item.Tags = info.Tags.ToArray(info.Tags.Count);
+                item.HomePageUrl = info.HomePageUrl;
                 item.OriginalTitle = info.OriginalTitle;
             }
             else if (info.Type == ChannelItemType.Folder && info.FolderType == ChannelFolderType.Container)
@@ -1054,7 +1058,7 @@ namespace Emby.Server.Implementations.Channels
                     _logger.Debug("Forcing update due to TrailerTypes {0}", item.Name);
                     forceUpdate = true;
                 }
-                trailer.TrailerTypes = info.TrailerTypes.ToArray();
+                trailer.TrailerTypes = info.TrailerTypes;
             }
 
             if (info.DateModified > item.DateModified)
@@ -1064,20 +1068,20 @@ namespace Emby.Server.Implementations.Channels
                 forceUpdate = true;
             }
 
-            // was used for status
-            //if (!string.Equals(item.ExternalEtag ?? string.Empty, info.Etag ?? string.Empty, StringComparison.Ordinal))
-            //{
-            //    item.ExternalEtag = info.Etag;
-            //    forceUpdate = true;
-            //    _logger.Debug("Forcing update due to ExternalEtag {0}", item.Name);
-            //}
+            if (!string.Equals(item.ExternalEtag ?? string.Empty, info.Etag ?? string.Empty, StringComparison.Ordinal))
+            {
+                item.ExternalEtag = info.Etag;
+                forceUpdate = true;
+                _logger.Debug("Forcing update due to ExternalEtag {0}", item.Name);
+            }
 
-            if (!internalChannelId.Equals(item.ChannelId))
+            var channelIdString = internalChannelId.ToString("N");
+            if (!string.Equals(item.ChannelId, channelIdString, StringComparison.OrdinalIgnoreCase))
             {
                 forceUpdate = true;
                 _logger.Debug("Forcing update due to ChannelId {0}", item.Name);
             }
-            item.ChannelId = internalChannelId;
+            item.ChannelId = channelIdString;
 
             if (!item.ParentId.Equals(parentFolderId))
             {
@@ -1086,7 +1090,7 @@ namespace Emby.Server.Implementations.Channels
             }
             item.ParentId = parentFolderId;
 
-            var hasSeries = item as IHasSeriesName;
+            var hasSeries = item as IHasSeries;
             if (hasSeries != null)
             {
                 if (!string.Equals(hasSeries.SeriesName, info.SeriesName, StringComparison.OrdinalIgnoreCase))
@@ -1152,7 +1156,7 @@ namespace Emby.Server.Implementations.Channels
 
             if (isNew)
             {
-                _libraryManager.CreateItem(item, parentFolder);
+                _libraryManager.CreateItem(item);
 
                 if (info.People != null && info.People.Count > 0)
                 {
@@ -1192,7 +1196,7 @@ namespace Emby.Server.Implementations.Channels
             }
 
             var result = GetAllChannels()
-                .FirstOrDefault(i => GetInternalChannelId(i.Name).Equals(channel.ChannelId) || string.Equals(i.Name, channel.Name, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(i => string.Equals(GetInternalChannelId(i.Name).ToString("N"), channel.ChannelId, StringComparison.OrdinalIgnoreCase) || string.Equals(i.Name, channel.Name, StringComparison.OrdinalIgnoreCase));
 
             if (result == null)
             {

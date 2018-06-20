@@ -70,7 +70,7 @@ namespace MediaBrowser.Api
         {
             if (string.IsNullOrWhiteSpace(value))
             {
-                return Array.Empty<string>();
+                return new string[] { };
             }
 
             if (removeEmpty)

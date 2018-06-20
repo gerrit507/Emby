@@ -18,7 +18,6 @@ using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Model.System;
 using System.IO;
-using MediaBrowser.Controller.Library;
 
 namespace Emby.Server.Implementations.LiveTv.TunerHosts
 {
@@ -28,15 +27,13 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
         private readonly IServerApplicationHost _appHost;
         private readonly IEnvironmentInfo _environment;
         private readonly INetworkManager _networkManager;
-        private readonly IMediaSourceManager _mediaSourceManager;
 
-        public M3UTunerHost(IServerConfigurationManager config, IMediaSourceManager mediaSourceManager, ILogger logger, IJsonSerializer jsonSerializer, IMediaEncoder mediaEncoder, IFileSystem fileSystem, IHttpClient httpClient, IServerApplicationHost appHost, IEnvironmentInfo environment, INetworkManager networkManager) : base(config, logger, jsonSerializer, mediaEncoder, fileSystem)
+        public M3UTunerHost(IServerConfigurationManager config, ILogger logger, IJsonSerializer jsonSerializer, IMediaEncoder mediaEncoder, IFileSystem fileSystem, IHttpClient httpClient, IServerApplicationHost appHost, IEnvironmentInfo environment, INetworkManager networkManager) : base(config, logger, jsonSerializer, mediaEncoder, fileSystem)
         {
             _httpClient = httpClient;
             _appHost = appHost;
             _environment = environment;
             _networkManager = networkManager;
-            _mediaSourceManager = mediaSourceManager;
         }
 
         public override string Type
@@ -87,18 +84,17 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
             ".mpd"
         };
 
-        protected override async Task<ILiveStream> GetChannelStream(TunerHostInfo info, ChannelInfo channelInfo, string streamId, List<ILiveStream> currentLiveStreams, CancellationToken cancellationToken)
+        protected override async Task<ILiveStream> GetChannelStream(TunerHostInfo info, ChannelInfo channelInfo, string streamId, CancellationToken cancellationToken)
         {
             var tunerCount = info.TunerCount;
 
             if (tunerCount > 0)
             {
-                var tunerHostId = info.Id;
-                var liveStreams = currentLiveStreams.Where(i => string.Equals(i.TunerHostId, tunerHostId, StringComparison.OrdinalIgnoreCase)).ToList();
+                var liveStreams = await EmbyTV.EmbyTV.Current.GetLiveStreams(info, cancellationToken).ConfigureAwait(false);
 
-                if (liveStreams.Count >= tunerCount)
+                if (liveStreams.Count >= info.TunerCount)
                 {
-                    throw new LiveTvConflictException("M3U simultaneous stream limit has been reached.");
+                    throw new LiveTvConflictException();
                 }
             }
 
@@ -135,11 +131,31 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
         protected virtual MediaSourceInfo CreateMediaSourceInfo(TunerHostInfo info, ChannelInfo channel)
         {
             var path = channel.Path;
+            MediaProtocol protocol = MediaProtocol.File;
 
             var supportsDirectPlay = !info.EnableStreamLooping && info.TunerCount == 0;
             var supportsDirectStream = !info.EnableStreamLooping;
 
-            var protocol = _mediaSourceManager.GetPathProtocol(path);
+            if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = MediaProtocol.Http;
+            }
+            else if (path.StartsWith("rtmp", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = MediaProtocol.Rtmp;
+            }
+            else if (path.StartsWith("rtsp", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = MediaProtocol.Rtsp;
+            }
+            else if (path.StartsWith("udp", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = MediaProtocol.Udp;
+            }
+            else if (path.StartsWith("rtp", StringComparison.OrdinalIgnoreCase))
+            {
+                protocol = MediaProtocol.Rtmp;
+            }
 
             Uri uri;
             var isRemote = true;

@@ -90,10 +90,10 @@ namespace MediaBrowser.Providers.Omdb
                 item.CommunityRating = imdbRating;
             }
 
-            //if (!string.IsNullOrEmpty(result.Website))
-            //{
-            //    item.HomePageUrl = result.Website;
-            //}
+            if (!string.IsNullOrEmpty(result.Website))
+            {
+                item.HomePageUrl = result.Website;
+            }
 
             if (!string.IsNullOrWhiteSpace(result.imdbID))
             {
@@ -197,10 +197,10 @@ namespace MediaBrowser.Providers.Omdb
                 item.CommunityRating = imdbRating;
             }
 
-            //if (!string.IsNullOrEmpty(result.Website))
-            //{
-            //    item.HomePageUrl = result.Website;
-            //}
+            if (!string.IsNullOrEmpty(result.Website))
+            {
+                item.HomePageUrl = result.Website;
+            }
 
             if (!string.IsNullOrWhiteSpace(result.imdbID))
             {
@@ -305,7 +305,7 @@ namespace MediaBrowser.Providers.Omdb
             {
                 using (var stream = response.Content)
                 {
-                    var rootObject = await _jsonSerializer.DeserializeFromStreamAsync<RootObject>(stream).ConfigureAwait(false);
+                    var rootObject = _jsonSerializer.DeserializeFromStream<RootObject>(stream);
                     _fileSystem.CreateDirectory(_fileSystem.GetDirectoryName(path));
                     _jsonSerializer.SerializeToFile(rootObject, path);
                 }
@@ -342,7 +342,7 @@ namespace MediaBrowser.Providers.Omdb
             {
                 using (var stream = response.Content)
                 {
-                    var rootObject = await _jsonSerializer.DeserializeFromStreamAsync<SeasonRootObject>(stream).ConfigureAwait(false);
+                    var rootObject = _jsonSerializer.DeserializeFromStream<SeasonRootObject>(stream);
                     _fileSystem.CreateDirectory(_fileSystem.GetDirectoryName(path));
                     _jsonSerializer.SerializeToFile(rootObject, path);
                 }
@@ -401,7 +401,7 @@ namespace MediaBrowser.Providers.Omdb
             // But only do it if english is the preferred language because this data will not be localized
             if (isConfiguredForEnglish && !string.IsNullOrWhiteSpace(result.Genre))
             {
-                item.Genres = Array.Empty<string>();
+                item.Genres.Clear();
 
                 foreach (var genre in result.Genre
                     .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)

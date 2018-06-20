@@ -33,8 +33,8 @@ namespace MediaBrowser.Api.ScheduledTasks
         /// <summary>
         /// Initializes a new instance of the <see cref="ScheduledTasksWebSocketListener" /> class.
         /// </summary>
-        public ScheduledTasksWebSocketListener(ILogger logger, ITaskManager taskManager)
-            : base(logger)
+        public ScheduledTasksWebSocketListener(ILogger logger, ITaskManager taskManager, ITimerFactory timerFactory)
+            : base(logger, timerFactory)
         {
             TaskManager = taskManager;
 
@@ -70,6 +70,14 @@ namespace MediaBrowser.Api.ScheduledTasks
                 .OrderBy(i => i.Name)
                 .Select(ScheduledTaskHelpers.GetTaskInfo)
                 .Where(i => !i.IsHidden));
+        }
+
+        protected override bool SendOnTimer
+        {
+            get
+            {
+                return false;
+            }
         }
 
         protected override void Dispose(bool dispose)

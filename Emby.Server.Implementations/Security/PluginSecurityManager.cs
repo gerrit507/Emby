@@ -28,7 +28,7 @@ namespace Emby.Server.Implementations.Security
 
         public async Task<bool> IsSupporter()
         {
-            var result = await GetRegistrationStatusInternal("MBSupporter", false, _appHost.ApplicationVersion.ToString(), CancellationToken.None).ConfigureAwait(false);
+            var result = await GetRegistrationStatus("MBSupporter", _appHost.ApplicationVersion.ToString()).ConfigureAwait(false);
 
             return result.IsRegistered;
         }
@@ -73,7 +73,33 @@ namespace Emby.Server.Implementations.Security
         /// </summary>
         public Task<MBRegistrationRecord> GetRegistrationStatus(string feature)
         {
-            return GetRegistrationStatusInternal(feature, false, null, CancellationToken.None);
+            return GetRegistrationStatus(feature, null);
+        }
+
+        /// <summary>
+        /// Gets the registration status.
+        /// </summary>
+        public Task<MBRegistrationRecord> GetRegistrationStatus(string feature, string mb2Equivalent)
+        {
+            return GetRegistrationStatus(feature, null, null);
+        }
+
+        private SemaphoreSlim _regCheckLock = new SemaphoreSlim(1, 1);
+        /// <summary>
+        /// Gets the registration status.
+        /// </summary>
+        public async Task<MBRegistrationRecord> GetRegistrationStatus(string feature, string mb2Equivalent, string version)
+        {
+            await _regCheckLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+
+            try
+            {
+                return await GetRegistrationStatusInternal(feature, version).ConfigureAwait(false);
+            }
+            finally
+            {
+                _regCheckLock.Release();
+            }
         }
 
         /// <summary>
@@ -105,7 +131,7 @@ namespace Emby.Server.Implementations.Security
                 LicenseFile.Save();
 
                 // Reset this
-                await GetRegistrationStatusInternal("MBSupporter", true, _appHost.ApplicationVersion.ToString(), CancellationToken.None).ConfigureAwait(false);
+                await IsSupporter().ConfigureAwait(false);
             }
         }
 
@@ -130,7 +156,7 @@ namespace Emby.Server.Implementations.Security
             {
                 using (var response = await _httpClient.Post(options).ConfigureAwait(false))
                 {
-                    var reg = await _jsonSerializer.DeserializeFromStreamAsync<RegRecord>(response.Content).ConfigureAwait(false);
+                    var reg = _jsonSerializer.DeserializeFromStream<RegRecord>(response.Content);
 
                     if (reg == null)
                     {
@@ -184,113 +210,97 @@ namespace Emby.Server.Implementations.Security
             }
         }
 
-        private SemaphoreSlim _regCheckLock = new SemaphoreSlim(1, 1);
-
-        private async Task<MBRegistrationRecord> GetRegistrationStatusInternal(string feature, bool forceCallToServer, string version, CancellationToken cancellationToken)
+        private async Task<MBRegistrationRecord> GetRegistrationStatusInternal(string feature,
+            string version = null)
         {
-            await _regCheckLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var regInfo = LicenseFile.GetRegInfo(feature);
+            var lastChecked = regInfo == null ? DateTime.MinValue : regInfo.LastChecked;
+            var expDate = regInfo == null ? DateTime.MinValue : regInfo.ExpirationDate;
 
-            try
+            var maxCacheDays = 14;
+            var nextCheckDate = new [] { expDate, lastChecked.AddDays(maxCacheDays) }.Min();
+
+            if (nextCheckDate > DateTime.UtcNow.AddDays(maxCacheDays))
             {
-                var regInfo = LicenseFile.GetRegInfo(feature);
-                var lastChecked = regInfo == null ? DateTime.MinValue : regInfo.LastChecked;
-                var expDate = regInfo == null ? DateTime.MinValue : regInfo.ExpirationDate;
+                nextCheckDate = DateTime.MinValue;
+            }
 
-                var maxCacheDays = 14;
-                var nextCheckDate = new[] { expDate, lastChecked.AddDays(maxCacheDays) }.Min();
+            //check the reg file first to alleviate strain on the MB admin server - must actually check in every 30 days tho
+            var reg = new RegRecord
+            {
+                // Cache the result for up to a week
+                registered = regInfo != null && nextCheckDate >= DateTime.UtcNow && expDate >= DateTime.UtcNow,
+                expDate = expDate
+            };
 
-                if (nextCheckDate > DateTime.UtcNow.AddDays(maxCacheDays))
+            var key = SupporterKey;
+
+            var success = reg.registered;
+
+            if (!(lastChecked > DateTime.UtcNow.AddDays(-1)) || (!reg.registered))
+            {
+                var data = new Dictionary<string, string>
                 {
-                    nextCheckDate = DateTime.MinValue;
-                }
-
-                //check the reg file first to alleviate strain on the MB admin server - must actually check in every 30 days tho
-                var reg = new RegRecord
-                {
-                    // Cache the result for up to a week
-                    registered = regInfo != null && nextCheckDate >= DateTime.UtcNow && expDate >= DateTime.UtcNow,
-                    expDate = expDate
-                };
-
-                var key = SupporterKey;
-
-                if (!forceCallToServer && string.IsNullOrWhiteSpace(key))
-                {
-                    return new MBRegistrationRecord();
-                }
-
-                var success = reg.registered;
-
-                if (!(lastChecked > DateTime.UtcNow.AddDays(-1)) || (!reg.registered))
-                {
-                    var data = new Dictionary<string, string>
-                {
-                    { "feature", feature },
-                    { "key", key },
-                    { "mac", _appHost.SystemId },
-                    { "systemid", _appHost.SystemId },
-                    { "ver", version },
+                    { "feature", feature }, 
+                    { "key", key }, 
+                    { "mac", _appHost.SystemId }, 
+                    { "systemid", _appHost.SystemId }, 
+                    { "ver", version }, 
                     { "platform", _appHost.OperatingSystemDisplayName }
                 };
 
-                    try
-                    {
-                        var options = new HttpRequestOptions
-                        {
-                            Url = MBValidateUrl,
-
-                            // Seeing block length errors
-                            EnableHttpCompression = false,
-                            BufferContent = false,
-                            CancellationToken = cancellationToken
-                        };
-
-                        options.SetPostData(data);
-
-                        using (var response = (await _httpClient.Post(options).ConfigureAwait(false)))
-                        {
-                            using (var json = response.Content)
-                            {
-                                reg = await _jsonSerializer.DeserializeFromStreamAsync<RegRecord>(json).ConfigureAwait(false);
-                                success = true;
-                            }
-                        }
-
-                        if (reg.registered)
-                        {
-                            _logger.Info("Registered for feature {0}", feature);
-                            LicenseFile.AddRegCheck(feature, reg.expDate);
-                        }
-                        else
-                        {
-                            _logger.Info("Not registered for feature {0}", feature);
-                            LicenseFile.RemoveRegCheck(feature);
-                        }
-
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.ErrorException("Error checking registration status of {0}", e, feature);
-                    }
-                }
-
-                var record = new MBRegistrationRecord
+                try
                 {
-                    IsRegistered = reg.registered,
-                    ExpirationDate = reg.expDate,
-                    RegChecked = true,
-                    RegError = !success
-                };
+                    var options = new HttpRequestOptions
+                    {
+                        Url = MBValidateUrl,
 
-                record.TrialVersion = IsInTrial(reg.expDate, record.RegChecked, record.IsRegistered);
-                record.IsValid = !record.RegChecked || record.IsRegistered || record.TrialVersion;
+                        // Seeing block length errors
+                        EnableHttpCompression = false,
+                        BufferContent = false
+                    };
 
-                return record;
+                    options.SetPostData(data);
+
+                    using (var response = (await _httpClient.Post(options).ConfigureAwait(false)))
+                    {
+                        using (var json = response.Content)
+                        {
+                            reg = _jsonSerializer.DeserializeFromStream<RegRecord>(json);
+                            success = true;
+                        }
+                    }
+
+                    if (reg.registered)
+                    {
+                        _logger.Info("Registered for feature {0}", feature);
+                        LicenseFile.AddRegCheck(feature, reg.expDate);
+                    }
+                    else
+                    {
+                        _logger.Info("Not registered for feature {0}", feature);
+                        LicenseFile.RemoveRegCheck(feature);
+                    }
+
+                }
+                catch (Exception e)
+                {
+                    _logger.ErrorException("Error checking registration status of {0}", e, feature);
+                }
             }
-            finally
+
+            var record = new MBRegistrationRecord
             {
-                _regCheckLock.Release();
-            }
+                IsRegistered = reg.registered,
+                ExpirationDate = reg.expDate,
+                RegChecked = true,
+                RegError = !success
+            };
+
+            record.TrialVersion = IsInTrial(reg.expDate, record.RegChecked, record.IsRegistered);
+            record.IsValid = !record.RegChecked || record.IsRegistered || record.TrialVersion;
+
+            return record;
         }
 
         private bool IsInTrial(DateTime expirationDate, bool regChecked, bool isRegistered)

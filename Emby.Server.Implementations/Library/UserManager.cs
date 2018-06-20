@@ -29,10 +29,6 @@ using System.Threading.Tasks;
 using MediaBrowser.Model.Cryptography;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Authentication;
-using MediaBrowser.Controller.Security;
-using MediaBrowser.Controller.Devices;
-using MediaBrowser.Controller.Session;
-using MediaBrowser.Controller.Plugins;
 
 namespace Emby.Server.Implementations.Library
 {
@@ -45,9 +41,7 @@ namespace Emby.Server.Implementations.Library
         /// Gets the users.
         /// </summary>
         /// <value>The users.</value>
-        public IEnumerable<User> Users { get { return _users; } }
-
-        private User[] _users;
+        public IEnumerable<User> Users { get; private set; }
 
         /// <summary>
         /// The _logger
@@ -96,7 +90,7 @@ namespace Emby.Server.Implementations.Library
             _fileSystem = fileSystem;
             _cryptographyProvider = cryptographyProvider;
             ConfigurationManager = configurationManager;
-            _users = Array.Empty<User>();
+            Users = new List<User>();
 
             DeletePinFile();
         }
@@ -164,7 +158,7 @@ namespace Emby.Server.Implementations.Library
         /// <exception cref="System.ArgumentNullException"></exception>
         public User GetUserById(Guid id)
         {
-            if (id.Equals(Guid.Empty))
+            if (id == Guid.Empty)
             {
                 throw new ArgumentNullException("id");
             }
@@ -194,7 +188,7 @@ namespace Emby.Server.Implementations.Library
 
         public void Initialize()
         {
-            _users = LoadUsers();
+            Users = LoadUsers();
 
             var users = Users.ToList();
 
@@ -250,7 +244,7 @@ namespace Emby.Server.Implementations.Library
             return builder.ToString();
         }
 
-        public async Task<User> AuthenticateUser(string username, string password, string hashedPassword, string remoteEndPoint, bool isUserSession)
+        public async Task<User> AuthenticateUser(string username, string password, string hashedPassword, string passwordMd5, string remoteEndPoint, bool isUserSession)
         {
             if (string.IsNullOrWhiteSpace(username))
             {
@@ -278,7 +272,7 @@ namespace Emby.Server.Implementations.Library
                 {
                     try
                     {
-                        await _connectFactory().Authenticate(user.ConnectUserName, password).ConfigureAwait(false);
+                        await _connectFactory().Authenticate(user.ConnectUserName, password, passwordMd5).ConfigureAwait(false);
                         success = true;
                     }
                     catch
@@ -323,7 +317,7 @@ namespace Emby.Server.Implementations.Library
             {
                 try
                 {
-                    var connectAuthResult = await _connectFactory().Authenticate(username, password).ConfigureAwait(false);
+                    var connectAuthResult = await _connectFactory().Authenticate(username, password, passwordMd5).ConfigureAwait(false);
 
                     user = Users.FirstOrDefault(i => string.Equals(i.ConnectUserId, connectAuthResult.User.Id, StringComparison.OrdinalIgnoreCase));
 
@@ -528,9 +522,9 @@ namespace Emby.Server.Implementations.Library
         /// Loads the users from the repository
         /// </summary>
         /// <returns>IEnumerable{User}.</returns>
-        private User[] LoadUsers()
+        private List<User> LoadUsers()
         {
-            var users = UserRepository.RetrieveAllUsers();
+            var users = UserRepository.RetrieveAllUsers().ToList();
 
             // There always has to be at least one user.
             if (users.Count == 0)
@@ -556,7 +550,7 @@ namespace Emby.Server.Implementations.Library
                 UpdateUserPolicy(user, user.Policy, false);
             }
 
-            return users.ToArray();
+            return users;
         }
 
         public UserDto GetUserDto(User user, string remoteEndPoint = null)
@@ -575,7 +569,7 @@ namespace Emby.Server.Implementations.Library
 
             var dto = new UserDto
             {
-                Id = user.Id,
+                Id = user.Id.ToString("N"),
                 Name = user.Name,
                 HasPassword = hasPassword,
                 HasConfiguredPassword = hasConfiguredPassword,
@@ -698,7 +692,7 @@ namespace Emby.Server.Implementations.Library
                 throw new ArgumentNullException("user");
             }
 
-            if (user.Id.Equals(Guid.Empty) || !Users.Any(u => u.Id.Equals(user.Id)))
+            if (user.Id == Guid.Empty || !Users.Any(u => u.Id.Equals(user.Id)))
             {
                 throw new ArgumentException(string.Format("User with name '{0}' and Id {1} does not exist.", user.Name, user.Id));
             }
@@ -747,7 +741,7 @@ namespace Emby.Server.Implementations.Library
 
                 var list = Users.ToList();
                 list.Add(user);
-                _users = list.ToArray();
+                Users = list;
 
                 user.DateLastSaved = DateTime.UtcNow;
 
@@ -779,7 +773,7 @@ namespace Emby.Server.Implementations.Library
 
             if (user.ConnectLinkType.HasValue)
             {
-                await _connectFactory().RemoveConnect(user).ConfigureAwait(false);
+                await _connectFactory().RemoveConnect(user.Id.ToString("N")).ConfigureAwait(false);
             }
 
             var allUsers = Users.ToList();
@@ -818,7 +812,7 @@ namespace Emby.Server.Implementations.Library
 
                 DeleteUserPolicy(user);
 
-                _users = allUsers.Where(i => i.Id != user.Id).ToArray();
+                Users = allUsers.Where(i => i.Id != user.Id).ToList();
 
                 OnUserDeleted(user);
             }
@@ -1099,7 +1093,7 @@ namespace Emby.Server.Implementations.Library
         }
 
         private readonly object _policySyncLock = new object();
-        public void UpdateUserPolicy(Guid userId, UserPolicy userPolicy)
+        public void UpdateUserPolicy(string userId, UserPolicy userPolicy)
         {
             var user = GetUserById(userId);
             UpdateUserPolicy(user, userPolicy, true);
@@ -1189,7 +1183,7 @@ namespace Emby.Server.Implementations.Library
         }
 
         private readonly object _configSyncLock = new object();
-        public void UpdateConfiguration(Guid userId, UserConfiguration config)
+        public void UpdateConfiguration(string userId, UserConfiguration config)
         {
             var user = GetUserById(userId);
             UpdateConfiguration(user, config);
@@ -1223,58 +1217,6 @@ namespace Emby.Server.Implementations.Library
             {
                 EventHelper.FireEventIfNotNull(UserConfigurationUpdated, this, new GenericEventArgs<User> { Argument = user }, _logger);
             }
-        }
-    }
-
-    public class DeviceAccessEntryPoint : IServerEntryPoint
-    {
-        private IUserManager _userManager;
-        private IAuthenticationRepository _authRepo;
-        private IDeviceManager _deviceManager;
-        private ISessionManager _sessionManager;
-
-        public DeviceAccessEntryPoint(IUserManager userManager, IAuthenticationRepository authRepo, IDeviceManager deviceManager, ISessionManager sessionManager)
-        {
-            _userManager = userManager;
-            _authRepo = authRepo;
-            _deviceManager = deviceManager;
-            _sessionManager = sessionManager;
-        }
-
-        public void Run()
-        {
-            _userManager.UserPolicyUpdated += _userManager_UserPolicyUpdated;
-        }
-
-        private void _userManager_UserPolicyUpdated(object sender, GenericEventArgs<User> e)
-        {
-            var user = e.Argument;
-            if (!user.Policy.EnableAllDevices)
-            {
-                UpdateDeviceAccess(user);
-            }
-        }
-
-        private void UpdateDeviceAccess(User user)
-        {
-            var existing = _authRepo.Get(new AuthenticationInfoQuery
-            {
-                UserId = user.Id
-
-            }).Items;
-
-            foreach (var authInfo in existing)
-            {
-                if (!string.IsNullOrEmpty(authInfo.DeviceId) && !_deviceManager.CanAccessDevice(user, authInfo.DeviceId))
-                {
-                    _sessionManager.Logout(authInfo.AccessToken);
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-
         }
     }
 }

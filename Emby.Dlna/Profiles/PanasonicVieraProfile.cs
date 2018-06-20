@@ -3,7 +3,7 @@ using System.Xml.Serialization;
 
 namespace Emby.Dlna.Profiles
 {
-    [System.Xml.Serialization.XmlRoot("Profile")]
+    [XmlRoot("Profile")]
     public class PanasonicVieraProfile : DefaultProfile
     {
         public PanasonicVieraProfile()

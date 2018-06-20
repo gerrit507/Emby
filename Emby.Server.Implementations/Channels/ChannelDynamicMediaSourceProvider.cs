@@ -28,7 +28,12 @@ namespace Emby.Server.Implementations.Channels
             return Task.FromResult<IEnumerable<MediaSourceInfo>>(new List<MediaSourceInfo>());
         }
 
-        public Task<ILiveStream> OpenMediaSource(string openToken, List<ILiveStream> currentLiveStreams, CancellationToken cancellationToken)
+        public Task<Tuple<MediaSourceInfo, IDirectStreamProvider, bool>> OpenMediaSource(string openToken, CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task CloseMediaSource(string liveStreamId)
         {
             throw new NotImplementedException();
         }

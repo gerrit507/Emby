@@ -7,7 +7,6 @@ using MediaBrowser.Model.Dto;
 using System.Collections.Generic;
 using System.Linq;
 using MediaBrowser.Model.Services;
-using System;
 
 namespace MediaBrowser.Api.UserLibrary
 {
@@ -37,7 +36,7 @@ namespace MediaBrowser.Api.UserLibrary
         /// </summary>
         /// <value>The user id.</value>
         [ApiMember(Name = "UserId", Description = "Optional. Filter by user id, and attach user data", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
-        public Guid UserId { get; set; }
+        public string UserId { get; set; }
     }
 
     /// <summary>
@@ -55,7 +54,7 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var result = GetItem(request);
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -69,7 +68,7 @@ namespace MediaBrowser.Api.UserLibrary
 
             var item = GetPerson(request.Name, LibraryManager, dtoOptions);
             
-            if (!request.UserId.Equals(Guid.Empty))
+            if (!string.IsNullOrWhiteSpace(request.UserId))
             {
                 var user = UserManager.GetUserById(request.UserId);
 
@@ -88,7 +87,7 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var result = GetResult(request);
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -100,7 +99,7 @@ namespace MediaBrowser.Api.UserLibrary
         protected override IEnumerable<BaseItem> GetAllItems(GetItemsByName request, IList<BaseItem> items)
         {
             var inputPersonTypes = ((GetPersons)request).PersonTypes;
-            var personTypes = string.IsNullOrEmpty(inputPersonTypes) ? Array.Empty<string>() : inputPersonTypes.Split(',');
+            var personTypes = string.IsNullOrEmpty(inputPersonTypes) ? new string[] { } : inputPersonTypes.Split(',');
 
             // Either get all people, or all people filtered by a specific person type
             var allPeople = GetAllPeople(items, personTypes);

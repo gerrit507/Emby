@@ -64,69 +64,45 @@ namespace MediaBrowser.Providers.MediaInfo
         {
             var options = GetOptions();
 
-            var types = new[] { "Episode", "Movie" };
+            var types = new List<string>();
+
+            types.Add("Episode");
+            types.Add("Movie");
 
             var dict = new Dictionary<Guid, BaseItem>();
 
-            foreach (var library in _libraryManager.RootFolder.Children.ToList())
+            foreach (var lang in options.DownloadLanguages)
             {
-                var libraryOptions = _libraryManager.GetLibraryOptions(library);
-
-                string[] subtitleDownloadLanguages;
-                bool SkipIfEmbeddedSubtitlesPresent;
-                bool SkipIfAudioTrackMatches;
-                bool RequirePerfectMatch;
-
-                if (libraryOptions.SubtitleDownloadLanguages == null)
+                var query = new InternalItemsQuery
                 {
-                    subtitleDownloadLanguages = options.DownloadLanguages;
-                    SkipIfEmbeddedSubtitlesPresent = options.SkipIfEmbeddedSubtitlesPresent;
-                    SkipIfAudioTrackMatches = options.SkipIfAudioTrackMatches;
-                    RequirePerfectMatch = options.RequirePerfectMatch;
+                    MediaTypes = new string[] {MediaType.Video},
+                    IsVirtualItem = false,
+                    IncludeItemTypes = types.ToArray(types.Count),
+                    DtoOptions = new DtoOptions(true),
+                    SourceTypes = new[] {SourceType.Library}
+                };
+
+                if (options.SkipIfAudioTrackMatches)
+                {
+                    query.HasNoAudioTrackWithLanguage = lang;
+                }
+
+                if (options.SkipIfEmbeddedSubtitlesPresent)
+                {
+                    // Exclude if it already has any subtitles of the same language
+                    query.HasNoSubtitleTrackWithLanguage = lang;
                 }
                 else
                 {
-                    subtitleDownloadLanguages = libraryOptions.SubtitleDownloadLanguages;
-                    SkipIfEmbeddedSubtitlesPresent = libraryOptions.SkipSubtitlesIfEmbeddedSubtitlesPresent;
-                    SkipIfAudioTrackMatches = libraryOptions.SkipSubtitlesIfAudioTrackMatches;
-                    RequirePerfectMatch = libraryOptions.RequirePerfectSubtitleMatch;
+                    // Exclude if it already has external subtitles of the same language
+                    query.HasNoExternalSubtitleTrackWithLanguage = lang;
                 }
 
-                foreach (var lang in subtitleDownloadLanguages)
+                var videosByLanguage = _libraryManager.GetItemList(query);
+
+                foreach (var video in videosByLanguage)
                 {
-                    var query = new InternalItemsQuery
-                    {
-                        MediaTypes = new string[] { MediaType.Video },
-                        IsVirtualItem = false,
-                        IncludeItemTypes = types,
-                        DtoOptions = new DtoOptions(true),
-                        SourceTypes = new[] { SourceType.Library },
-                        Parent = library,
-                        Recursive = true
-                    };
-
-                    if (SkipIfAudioTrackMatches)
-                    {
-                        query.HasNoAudioTrackWithLanguage = lang;
-                    }
-
-                    if (SkipIfEmbeddedSubtitlesPresent)
-                    {
-                        // Exclude if it already has any subtitles of the same language
-                        query.HasNoSubtitleTrackWithLanguage = lang;
-                    }
-                    else
-                    {
-                        // Exclude if it already has external subtitles of the same language
-                        query.HasNoExternalSubtitleTrackWithLanguage = lang;
-                    }
-
-                    var videosByLanguage = _libraryManager.GetItemList(query);
-
-                    foreach (var video in videosByLanguage)
-                    {
-                        dict[video.Id] = video;
-                    }
+                    dict[video.Id] = video;
                 }
             }
 
@@ -194,8 +170,6 @@ namespace MediaBrowser.Providers.MediaInfo
                 SkipIfAudioTrackMatches,
                 RequirePerfectMatch,
                 subtitleDownloadLanguages,
-                libraryOptions.DisabledSubtitleFetchers,
-                libraryOptions.SubtitleFetcherOrder,
                 cancellationToken).ConfigureAwait(false);
 
             // Rescan

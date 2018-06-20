@@ -3,7 +3,7 @@ using MediaBrowser.Model.Dlna;
 
 namespace Emby.Dlna.Profiles
 {
-    [System.Xml.Serialization.XmlRoot("Profile")]
+    [XmlRoot("Profile")]
     public class MarantzProfile : DefaultProfile
     {
         public MarantzProfile()

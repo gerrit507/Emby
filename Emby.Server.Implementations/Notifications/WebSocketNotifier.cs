@@ -4,9 +4,6 @@ using MediaBrowser.Controller.Notifications;
 using MediaBrowser.Controller.Plugins;
 using System.Linq;
 using MediaBrowser.Model.Extensions;
-using MediaBrowser.Controller.Session;
-using System.Collections.Generic;
-using System.Threading;
 
 namespace Emby.Server.Implementations.Notifications
 {
@@ -17,12 +14,12 @@ namespace Emby.Server.Implementations.Notifications
     {
         private readonly INotificationsRepository _notificationsRepo;
 
-        private readonly ISessionManager _sessionManager;
+        private readonly IServerManager _serverManager;
 
-        public WebSocketNotifier(INotificationsRepository notificationsRepo, ISessionManager sessionManager)
+        public WebSocketNotifier(INotificationsRepository notificationsRepo, IServerManager serverManager)
         {
             _notificationsRepo = notificationsRepo;
-            _sessionManager = sessionManager;
+            _serverManager = serverManager;
         }
 
         public void Run()
@@ -40,36 +37,19 @@ namespace Emby.Server.Implementations.Notifications
 
             var msg = string.Join("|", list.ToArray(list.Count));
 
-            SendMessageToUserSession(new Guid(e.UserId), "NotificationsMarkedRead", msg);
+            _serverManager.SendWebSocketMessage("NotificationsMarkedRead", msg);
         }
 
         void _notificationsRepo_NotificationAdded(object sender, NotificationUpdateEventArgs e)
         {
             var msg = e.Notification.UserId + "|" + e.Notification.Id;
 
-            SendMessageToUserSession(new Guid(e.Notification.UserId), "NotificationAdded", msg);
-        }
-
-        private async void SendMessageToUserSession<T>(Guid userId, string name, T data)
-        {
-            try
-            {
-                await _sessionManager.SendMessageToUserSessions(new List<Guid> { userId }, name, data, CancellationToken.None);
-            }
-            catch (ObjectDisposedException)
-            {
-
-            }
-            catch (Exception)
-            {
-                //Logger.ErrorException("Error sending message", ex);
-            }
+            _serverManager.SendWebSocketMessage("NotificationAdded", msg);
         }
 
         public void Dispose()
         {
             _notificationsRepo.NotificationAdded -= _notificationsRepo_NotificationAdded;
-            _notificationsRepo.NotificationsMarkedRead -= _notificationsRepo_NotificationsMarkedRead;
         }
     }
 }

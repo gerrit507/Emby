@@ -208,17 +208,13 @@ namespace MediaBrowser.Providers.TV
             result.Item = new Series();
             result.ResultLanguage = seriesInfo.ResultLanguage;
 
-            var settings = await MovieDbProvider.Current.GetTmdbSettings(cancellationToken).ConfigureAwait(false);
-
-            ProcessMainInfo(result, seriesInfo, preferredCountryCode, settings);
+            ProcessMainInfo(result.Item, seriesInfo, preferredCountryCode);
 
             return result;
         }
 
-        private void ProcessMainInfo(MetadataResult<Series> seriesResult, RootObject seriesInfo, string preferredCountryCode, TmdbSettingsResult settings)
+        private void ProcessMainInfo(Series series, RootObject seriesInfo, string preferredCountryCode)
         {
-            var series = seriesResult.Item;
-
             series.Name = seriesInfo.name;
             series.SetProviderId(MetadataProviders.Tmdb, seriesInfo.id.ToString(_usCulture));
 
@@ -241,10 +237,10 @@ namespace MediaBrowser.Providers.TV
 
             if (seriesInfo.genres != null)
             {
-                series.Genres = seriesInfo.genres.Select(i => i.name).ToArray();
+                series.Genres = seriesInfo.genres.Select(i => i.name).ToList();
             }
 
-            //series.HomePageUrl = seriesInfo.homepage;
+            series.HomePageUrl = seriesInfo.homepage;
 
             series.RunTimeTicks = seriesInfo.episode_run_time.Select(i => TimeSpan.FromMinutes(i).Ticks).FirstOrDefault();
 
@@ -311,35 +307,6 @@ namespace MediaBrowser.Providers.TV
                     }
                 }
             }
-
-            seriesResult.ResetPeople();
-            var tmdbImageUrl = settings.images.GetImageUrl("original");
-
-            if (seriesInfo.credits != null && seriesInfo.credits.cast != null)
-            {
-                foreach (var actor in seriesInfo.credits.cast.OrderBy(a => a.order))
-                {
-                    var personInfo = new PersonInfo
-                    {
-                        Name = actor.name.Trim(),
-                        Role = actor.character,
-                        Type = PersonType.Actor,
-                        SortOrder = actor.order
-                    };
-
-                    if (!string.IsNullOrWhiteSpace(actor.profile_path))
-                    {
-                        personInfo.ImageUrl = tmdbImageUrl + actor.profile_path;
-                    }
-
-                    if (actor.id > 0)
-                    {
-                        personInfo.SetProviderId(MetadataProviders.Tmdb, actor.id.ToString(CultureInfo.InvariantCulture));
-                    }
-
-                    seriesResult.AddPerson(personInfo);
-                }
-            }
         }
 
         internal static string GetSeriesDataPath(IApplicationPaths appPaths, string tmdbId)
@@ -395,7 +362,7 @@ namespace MediaBrowser.Providers.TV
             {
                 using (var json = response.Content)
                 {
-                    mainResult = await _jsonSerializer.DeserializeFromStreamAsync<RootObject>(json).ConfigureAwait(false);
+                    mainResult = _jsonSerializer.DeserializeFromStream<RootObject>(json);
 
                     if (!string.IsNullOrEmpty(language))
                     {
@@ -432,7 +399,7 @@ namespace MediaBrowser.Providers.TV
                 {
                     using (var json = response.Content)
                     {
-                        var englishResult = await _jsonSerializer.DeserializeFromStreamAsync<RootObject>(json).ConfigureAwait(false);
+                        var englishResult = _jsonSerializer.DeserializeFromStream<RootObject>(json);
 
                         mainResult.overview = englishResult.overview;
                         mainResult.ResultLanguage = "en";
@@ -443,6 +410,7 @@ namespace MediaBrowser.Providers.TV
             return mainResult;
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         internal Task EnsureSeriesInfo(string tmdbId, string language, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(tmdbId))
@@ -459,7 +427,7 @@ namespace MediaBrowser.Providers.TV
                 // If it's recent or automatic updates are enabled, don't re-download
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 3)
                 {
-                    return Task.CompletedTask;
+                    return _cachedTask;
                 }
             }
 
@@ -497,7 +465,7 @@ namespace MediaBrowser.Providers.TV
             {
                 using (var json = response.Content)
                 {
-                    var result = await _jsonSerializer.DeserializeFromStreamAsync<MovieDbSearch.ExternalIdLookupResult>(json).ConfigureAwait(false);
+                    var result = _jsonSerializer.DeserializeFromStream<MovieDbSearch.ExternalIdLookupResult>(json);
 
                     if (result != null && result.tv_results != null)
                     {

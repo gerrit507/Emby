@@ -125,11 +125,17 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
         private void ParseSetXml(string xml, Movie movie)
         {
-            //xml = xml.Substring(xml.IndexOf('<'));
-            //xml = xml.Substring(0, xml.LastIndexOf('>'));
-
-            using (var stringReader = new StringReader("<set>" + xml + "</set>"))
+            using (var ms = new MemoryStream())
             {
+                //xml = xml.Substring(xml.IndexOf('<'));
+                //xml = xml.Substring(0, xml.LastIndexOf('>'));
+                xml = "<set>" + xml + "</set>";
+
+                var bytes = Encoding.UTF8.GetBytes(xml);
+
+                ms.Write(bytes, 0, bytes.Length);
+                ms.Position = 0;
+
                 // These are not going to be valid xml so no sense in causing the provider to fail and spamming the log with exceptions
                 try
                 {
@@ -140,7 +146,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     settings.IgnoreComments = true;
 
                     // Use XmlReader for best performance
-                    using (var reader = XmlReader.Create(stringReader, settings))
+                    using (var reader = XmlReader.Create(ms, settings))
                     {
                         reader.MoveToContent();
                         reader.Read();

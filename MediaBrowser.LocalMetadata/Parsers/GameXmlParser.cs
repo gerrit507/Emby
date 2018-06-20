@@ -18,13 +18,14 @@ namespace MediaBrowser.LocalMetadata.Parsers
     {
         private readonly CultureInfo _usCulture = new CultureInfo("en-US");
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         public Task FetchAsync(MetadataResult<Game> item, string metadataFile, CancellationToken cancellationToken)
         {
             Fetch(item, metadataFile, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.CompletedTask;
+            return _cachedTask;
         }
 
         /// <summary>

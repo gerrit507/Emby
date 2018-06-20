@@ -29,7 +29,7 @@ namespace Emby.Server.Implementations.Channels
             CleanDatabase(cancellationToken);
 
             progress.Report(100);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public static string GetUserDistinctValue(User user)

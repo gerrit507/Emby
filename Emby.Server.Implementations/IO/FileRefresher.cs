@@ -202,7 +202,7 @@ namespace Emby.Server.Implementations.IO
                 // If the item has been deleted find the first valid parent that still exists
                 while (!_fileSystem.DirectoryExists(item.Path) && !_fileSystem.FileExists(item.Path))
                 {
-                    item = item.GetOwner() ?? item.GetParent();
+                    item = item.IsOwnedItem ? item.GetOwner() : item.GetParent();
 
                     if (item == null)
                     {
@@ -231,6 +231,7 @@ namespace Emby.Server.Implementations.IO
         {
             _disposed = true;
             DisposeTimer();
+            GC.SuppressFinalize(this);
         }
     }
 }

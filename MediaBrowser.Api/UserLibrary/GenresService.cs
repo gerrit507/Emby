@@ -38,7 +38,7 @@ namespace MediaBrowser.Api.UserLibrary
         /// </summary>
         /// <value>The user id.</value>
         [ApiMember(Name = "UserId", Description = "Optional. Filter by user id, and attach user data", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
-        public Guid UserId { get; set; }
+        public string UserId { get; set; }
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var result = GetItem(request);
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -70,7 +70,7 @@ namespace MediaBrowser.Api.UserLibrary
 
             var item = GetGenre(request.Name, LibraryManager, dtoOptions);
             
-            if (!request.UserId.Equals(Guid.Empty))
+            if (!string.IsNullOrWhiteSpace(request.UserId))
             {
                 var user = UserManager.GetUserById(request.UserId);
 
@@ -89,7 +89,7 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var result = GetResultSlim(request);
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         protected override QueryResult<Tuple<BaseItem, ItemCounts>> GetItems(GetItemsByName request, InternalItemsQuery query)

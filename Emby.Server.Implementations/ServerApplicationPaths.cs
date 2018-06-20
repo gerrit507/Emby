@@ -58,6 +58,26 @@ namespace Emby.Server.Implementations
         }
 
         /// <summary>
+        /// The _ibn path
+        /// </summary>
+        private string _ibnPath;
+        /// <summary>
+        /// Gets the path to the Images By Name directory
+        /// </summary>
+        /// <value>The images by name path.</value>
+        public string ItemsByNamePath
+        {
+            get
+            {
+                return _ibnPath ?? (_ibnPath = Path.Combine(ProgramDataPath, "ImagesByName"));
+            }
+            set
+            {
+                _ibnPath = value;
+            }
+        }
+
+        /// <summary>
         /// Gets the path to the People directory
         /// </summary>
         /// <value>The people path.</value>
@@ -65,7 +85,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "People");
+                return Path.Combine(ItemsByNamePath, "People");
             }
         }
 
@@ -73,7 +93,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "artists");
+                return Path.Combine(ItemsByNamePath, "artists");
             }
         }
 
@@ -85,7 +105,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "Genre");
+                return Path.Combine(ItemsByNamePath, "Genre");
             }
         }
 
@@ -97,7 +117,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "MusicGenre");
+                return Path.Combine(ItemsByNamePath, "MusicGenre");
             }
         }
 
@@ -109,7 +129,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "Studio");
+                return Path.Combine(ItemsByNamePath, "Studio");
             }
         }
 
@@ -121,7 +141,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "Year");
+                return Path.Combine(ItemsByNamePath, "Year");
             }
         }
 
@@ -133,7 +153,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "general");
+                return Path.Combine(ItemsByNamePath, "general");
             }
         }
 
@@ -145,7 +165,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "ratings");
+                return Path.Combine(ItemsByNamePath, "ratings");
             }
         }
 
@@ -157,7 +177,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "mediainfo");
+                return Path.Combine(ItemsByNamePath, "mediainfo");
             }
         }
 
@@ -211,7 +231,7 @@ namespace Emby.Server.Implementations
         {
             get
             {
-                return Path.Combine(InternalMetadataPath, "GameGenre");
+                return Path.Combine(ItemsByNamePath, "GameGenre");
             }
         }
 
@@ -227,15 +247,5 @@ namespace Emby.Server.Implementations
                 _internalMetadataPath = value;
             }
         }
-
-        private const string _virtualInternalMetadataPath = "%MetadataPath%";
-        public string VirtualInternalMetadataPath
-        {
-            get
-            {
-                return _virtualInternalMetadataPath;
-            }
-        }
-
     }
 }

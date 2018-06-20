@@ -81,7 +81,7 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
                 // No biggie here. Nothing to delete
             }
 
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
 

@@ -160,19 +160,11 @@ namespace Emby.Server.Implementations.Library.Resolvers.TV
                             return true;
                         }
 
-                        var namingOptions = ((LibraryManager)libraryManager).GetNamingOptions();
+                        var allowOptimisticEpisodeDetection = isTvContentType;
+                        var namingOptions = ((LibraryManager)libraryManager).GetNamingOptions(allowOptimisticEpisodeDetection);
 
                         var episodeResolver = new Emby.Naming.TV.EpisodeResolver(namingOptions);
-                        bool? isNamed = null;
-                        bool? isOptimistic = null;
-
-                        if (!isTvContentType)
-                        {
-                            isNamed = true;
-                            isOptimistic = false;
-                        }
-
-                        var episodeInfo = episodeResolver.Resolve(fullName, false, isNamed, isOptimistic, null, false);
+                        var episodeInfo = episodeResolver.Resolve(fullName, false, false);
                         if (episodeInfo != null && episodeInfo.EpisodeNumber.HasValue)
                         {
                             return true;
@@ -214,7 +206,7 @@ namespace Emby.Server.Implementations.Library.Resolvers.TV
         {
             var namingOptions = ((LibraryManager)libraryManager).GetNamingOptions();
 
-            var seasonNumber = new SeasonPathParser(namingOptions).Parse(path, isTvContentType, isTvContentType).SeasonNumber;
+            var seasonNumber = new SeasonPathParser(namingOptions, new RegexProvider()).Parse(path, isTvContentType, isTvContentType).SeasonNumber;
 
             return seasonNumber.HasValue;
         }

@@ -78,7 +78,7 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
 
             progress.Report(100);
 
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public string Key

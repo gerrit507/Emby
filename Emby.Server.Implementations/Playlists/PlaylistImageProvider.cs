@@ -53,7 +53,7 @@ namespace Emby.Server.Implementations.Playlists
                         return subItem;
                     }
 
-                    var parent = subItem.GetOwner() ?? subItem.GetParent();
+                    var parent = subItem.IsOwnedItem ? subItem.GetOwner() : subItem.GetParent();
 
                     if (parent != null && parent.HasImage(ImageType.Primary))
                     {
@@ -87,7 +87,7 @@ namespace Emby.Server.Implementations.Playlists
             {
                 Genres = new[] { item.Name },
                 IncludeItemTypes = new[] { typeof(MusicAlbum).Name, typeof(MusicVideo).Name, typeof(Audio).Name },
-                OrderBy = new[] { new ValueTuple<string, SortOrder>(ItemSortBy.Random, SortOrder.Ascending) },
+                OrderBy = new[] { new Tuple<string, SortOrder>(ItemSortBy.Random, SortOrder.Ascending) },
                 Limit = 4,
                 Recursive = true,
                 ImageTypes = new[] { ImageType.Primary },
@@ -95,6 +95,11 @@ namespace Emby.Server.Implementations.Playlists
 
             });
         }
+
+        //protected override Task<string> CreateImage(IHasMetadata item, List<BaseItem> itemsWithImages, string outputPathWithoutExtension, ImageType imageType, int imageIndex)
+        //{
+        //    return CreateSingleImage(itemsWithImages, outputPathWithoutExtension, ImageType.Primary);
+        //}
     }
 
     public class GenreImageProvider : BaseDynamicImageProvider<Genre>
@@ -112,7 +117,7 @@ namespace Emby.Server.Implementations.Playlists
             {
                 Genres = new[] { item.Name },
                 IncludeItemTypes = new[] { typeof(Series).Name, typeof(Movie).Name },
-                OrderBy = new[] { new ValueTuple<string, SortOrder>(ItemSortBy.Random, SortOrder.Ascending) },
+                OrderBy = new[] { new Tuple<string, SortOrder>(ItemSortBy.Random, SortOrder.Ascending) },
                 Limit = 4,
                 Recursive = true,
                 ImageTypes = new[] { ImageType.Primary },

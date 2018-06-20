@@ -220,7 +220,7 @@ namespace Emby.Dlna
             }
             else
             {
-                var headerString = string.Join(", ", headers.Select(i => string.Format("{0}={1}", i.Key, i.Value)).ToArray());
+                var headerString = string.Join(", ", headers.Select(i => string.Format("{0}={1}", i.Key, i.Value)).ToArray(headers.Count));
                 _logger.Debug("No matching device profile found. {0}", headerString);
             }
 

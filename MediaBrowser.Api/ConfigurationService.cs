@@ -8,7 +8,6 @@ using System.IO;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Services;
-using System.Threading.Tasks;
 
 namespace MediaBrowser.Api
 {
@@ -129,19 +128,19 @@ namespace MediaBrowser.Api
             _configurationManager.ReplaceConfiguration(config);
         }
 
-        public async Task Post(UpdateNamedConfiguration request)
+        public void Post(UpdateNamedConfiguration request)
         {
             var key = GetPathValue(2);
 
             var configurationType = _configurationManager.GetConfigurationType(key);
-            var configuration = await _jsonSerializer.DeserializeFromStreamAsync(request.RequestStream, configurationType).ConfigureAwait(false);
+            var configuration = _jsonSerializer.DeserializeFromStream(request.RequestStream, configurationType);
 
             _configurationManager.SaveConfiguration(key, configuration);
         }
 
         public object Get(GetDefaultMetadataOptions request)
         {
-            return ToOptimizedResult(new MetadataOptions());
+            return ToOptimizedSerializedResultUsingCache(new MetadataOptions());
         }
     }
 }

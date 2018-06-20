@@ -1,13 +1,12 @@
 using System;
 using System.IO;
 using Emby.Server.Implementations.HttpServer;
-using System.Threading.Tasks;
 
 namespace Emby.Server.Implementations.Services
 {
     public class RequestHelper
     {
-        public static Func<Type, Stream, Task<object>> GetRequestReader(HttpListenerHost host, string contentType)
+        public static Func<Type, Stream, object> GetRequestReader(HttpListenerHost host, string contentType)
         {
             switch (GetContentTypeWithoutEncoding(contentType))
             {

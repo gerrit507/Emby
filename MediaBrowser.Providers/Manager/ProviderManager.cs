@@ -68,18 +68,22 @@ namespace MediaBrowser.Providers.Manager
         private IExternalId[] _externalIds;
 
         private readonly Func<ILibraryManager> _libraryManagerFactory;
+        private readonly IMemoryStreamFactory _memoryStreamProvider;
         private CancellationTokenSource _disposeCancellationTokenSource = new CancellationTokenSource();
 
         public event EventHandler<GenericEventArgs<BaseItem>> RefreshStarted;
         public event EventHandler<GenericEventArgs<BaseItem>> RefreshCompleted;
         public event EventHandler<GenericEventArgs<Tuple<BaseItem, double>>> RefreshProgress;
 
-        private ISubtitleManager _subtitleManager;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="ProviderManager" /> class.
         /// </summary>
-        public ProviderManager(IHttpClient httpClient, ISubtitleManager subtitleManager, IServerConfigurationManager configurationManager, ILibraryMonitor libraryMonitor, ILogManager logManager, IFileSystem fileSystem, IServerApplicationPaths appPaths, Func<ILibraryManager> libraryManagerFactory, IJsonSerializer json)
+        /// <param name="httpClient">The HTTP client.</param>
+        /// <param name="configurationManager">The configuration manager.</param>
+        /// <param name="libraryMonitor">The directory watchers.</param>
+        /// <param name="logManager">The log manager.</param>
+        /// <param name="fileSystem">The file system.</param>
+        public ProviderManager(IHttpClient httpClient, IServerConfigurationManager configurationManager, ILibraryMonitor libraryMonitor, ILogManager logManager, IFileSystem fileSystem, IServerApplicationPaths appPaths, Func<ILibraryManager> libraryManagerFactory, IJsonSerializer json, IMemoryStreamFactory memoryStreamProvider)
         {
             _logger = logManager.GetLogger("ProviderManager");
             _httpClient = httpClient;
@@ -89,7 +93,7 @@ namespace MediaBrowser.Providers.Manager
             _appPaths = appPaths;
             _libraryManagerFactory = libraryManagerFactory;
             _json = json;
-            _subtitleManager = subtitleManager;
+            _memoryStreamProvider = memoryStreamProvider;
         }
 
         /// <summary>
@@ -162,10 +166,11 @@ namespace MediaBrowser.Providers.Manager
                 // TODO: Isolate this hack into the tvh plugin
                 if (string.IsNullOrEmpty(response.ContentType))
                 {
-                    if (url.IndexOf("/imagecache/", StringComparison.OrdinalIgnoreCase) != -1)
+                    if (response.ResponseUrl.IndexOf("/imagecache/", StringComparison.OrdinalIgnoreCase) != -1)
                     {
                         response.ContentType = "image/png";
                     }
+
                 }
 
                 await SaveImage(item, response.Content, response.ContentType, type, imageIndex, cancellationToken).ConfigureAwait(false);
@@ -174,7 +179,7 @@ namespace MediaBrowser.Providers.Manager
 
         public Task SaveImage(BaseItem item, Stream source, string mimeType, ImageType type, int? imageIndex, CancellationToken cancellationToken)
         {
-            return new ImageSaver(ConfigurationManager, _libraryMonitor, _fileSystem, _logger).SaveImage(item, source, mimeType, type, imageIndex, cancellationToken);
+            return new ImageSaver(ConfigurationManager, _libraryMonitor, _fileSystem, _logger, _memoryStreamProvider).SaveImage(item, source, mimeType, type, imageIndex, cancellationToken);
         }
 
         public Task SaveImage(BaseItem item, string source, string mimeType, ImageType type, int? imageIndex, bool? saveLocallyWithMedia, CancellationToken cancellationToken)
@@ -186,7 +191,7 @@ namespace MediaBrowser.Providers.Manager
 
             var fileStream = _fileSystem.GetFileStream(source, FileOpenMode.Open, FileAccessMode.Read, FileShareMode.ReadWrite, true);
 
-            return new ImageSaver(ConfigurationManager, _libraryMonitor, _fileSystem, _logger).SaveImage(item, fileStream, mimeType, type, imageIndex, saveLocallyWithMedia, cancellationToken);
+            return new ImageSaver(ConfigurationManager, _libraryMonitor, _fileSystem, _logger, _memoryStreamProvider).SaveImage(item, fileStream, mimeType, type, imageIndex, saveLocallyWithMedia, cancellationToken);
         }
 
         public async Task<IEnumerable<RemoteImageInfo>> GetAvailableRemoteImages(BaseItem item, RemoteImageQuery query, CancellationToken cancellationToken)
@@ -290,7 +295,7 @@ namespace MediaBrowser.Providers.Manager
                     {
                         var fetcherOrder = typeFetcherOrder ?? currentOptions.ImageFetcherOrder;
 
-                        var index = Array.IndexOf(fetcherOrder, i.Name);
+                        var index = Array.IndexOf(currentOptions.ImageFetcherOrder, i.Name);
 
                         if (index != -1)
                         {
@@ -357,9 +362,9 @@ namespace MediaBrowser.Providers.Manager
             }
 
             // If this restriction is ever lifted, movie xml providers will have to be updated to prevent owned items like trailers from reading those files
-            if (checkIsOwnedItem && item.ExtraType.HasValue)
+            if (checkIsOwnedItem && item.IsOwnedItem)
             {
-                if (provider is ILocalMetadataProvider)
+                if (provider is ILocalMetadataProvider || provider is IRemoteMetadataProvider)
                 {
                     return false;
                 }
@@ -477,13 +482,19 @@ namespace MediaBrowser.Providers.Manager
                 GetPluginSummary<Series>(),
                 GetPluginSummary<Season>(),
                 GetPluginSummary<Episode>(),
+                GetPluginSummary<Person>(),
                 GetPluginSummary<MusicAlbum>(),
                 GetPluginSummary<MusicArtist>(),
                 GetPluginSummary<Audio>(),
                 GetPluginSummary<AudioBook>(),
+                GetPluginSummary<Genre>(),
                 GetPluginSummary<Studio>(),
+                GetPluginSummary<GameGenre>(),
+                GetPluginSummary<MusicGenre>(),
                 GetPluginSummary<MusicVideo>(),
-                GetPluginSummary<Video>()
+                GetPluginSummary<Video>(),
+                GetPluginSummary<LiveTvChannel>(),
+                GetPluginSummary<LiveTvProgram>()
             };
         }
 
@@ -513,7 +524,7 @@ namespace MediaBrowser.Providers.Manager
             AddMetadataPlugins(pluginList, dummy, libraryOptions, options);
             AddImagePlugins(pluginList, dummy, imageProviders);
 
-            var subtitleProviders = _subtitleManager.GetSupportedProviders(dummy);
+            var subtitleProviders = new List<ISubtitleProvider>();
 
             // Subtitle fetchers
             pluginList.AddRange(subtitleProviders.Select(i => new MetadataPlugin
@@ -539,7 +550,7 @@ namespace MediaBrowser.Providers.Manager
         private void AddMetadataPlugins<T>(List<MetadataPlugin> list, T item, LibraryOptions libraryOptions, MetadataOptions options)
             where T : BaseItem
         {
-            var providers = GetMetadataProvidersInternal<T>(item, libraryOptions, options, true, true, false).ToList();
+            var providers = GetMetadataProvidersInternal<T>(item, libraryOptions, options, true, false, false).ToList();
 
             // Locals
             list.AddRange(providers.Where(i => (i is ILocalMetadataProvider)).Select(i => new MetadataPlugin
@@ -728,48 +739,24 @@ namespace MediaBrowser.Providers.Manager
             }
         }
 
-        public Task<IEnumerable<RemoteSearchResult>> GetRemoteSearchResults<TItemType, TLookupType>(RemoteSearchQuery<TLookupType> searchInfo, CancellationToken cancellationToken)
+        public async Task<IEnumerable<RemoteSearchResult>> GetRemoteSearchResults<TItemType, TLookupType>(RemoteSearchQuery<TLookupType> searchInfo,
+            CancellationToken cancellationToken)
             where TItemType : BaseItem, new()
             where TLookupType : ItemLookupInfo
         {
-            BaseItem referenceItem = null;
-
-            if (!searchInfo.ItemId.Equals(Guid.Empty))
+            // Give it a dummy path just so that it looks like a file system item
+            var dummy = new TItemType
             {
-                referenceItem = _libraryManagerFactory().GetItemById(searchInfo.ItemId);
-            }
+                Path = Path.Combine(_appPaths.InternalMetadataPath, "dummy"),
+                ParentId = Guid.NewGuid()
+            };
 
-            return GetRemoteSearchResults<TItemType, TLookupType>(searchInfo, referenceItem, cancellationToken);
-        }
+            dummy.SetParent(new Folder());
 
-        public async Task<IEnumerable<RemoteSearchResult>> GetRemoteSearchResults<TItemType, TLookupType>(RemoteSearchQuery<TLookupType> searchInfo, BaseItem referenceItem, CancellationToken cancellationToken)
-            where TItemType : BaseItem, new()
-            where TLookupType : ItemLookupInfo
-        {
-            LibraryOptions libraryOptions;
+            var options = GetMetadataOptions(dummy);
+            var libraryOptions = new LibraryOptions();
 
-            if (referenceItem == null)
-            {
-                // Give it a dummy path just so that it looks like a file system item
-                var dummy = new TItemType
-                {
-                    Path = Path.Combine(_appPaths.InternalMetadataPath, "dummy"),
-                    ParentId = Guid.NewGuid()
-                };
-
-                dummy.SetParent(new Folder());
-
-                referenceItem = dummy;
-                libraryOptions = new LibraryOptions();
-            }
-            else
-            {
-                libraryOptions = _libraryManagerFactory().GetLibraryOptions(referenceItem);
-            }
-
-            var options = GetMetadataOptions(referenceItem);
-
-            var providers = GetMetadataProvidersInternal<TItemType>(referenceItem, libraryOptions, options, searchInfo.IncludeDisabledProviders, false, false)
+            var providers = GetMetadataProvidersInternal<TItemType>(dummy, libraryOptions, options, searchInfo.IncludeDisabledProviders, false, false)
                 .OfType<IRemoteSearchProvider<TLookupType>>();
 
             if (!string.IsNullOrEmpty(searchInfo.SearchProviderName))

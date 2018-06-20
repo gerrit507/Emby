@@ -66,8 +66,6 @@ namespace Emby.Server.Implementations.Collections
                 return existingFolders[0];
             }
 
-            _fileSystem.CreateDirectory(path);
-
             var libraryOptions = new LibraryOptions
             {
                 PathInfos = new[] { new MediaPathInfo { Path = path } },
@@ -204,10 +202,10 @@ namespace Emby.Server.Implementations.Collections
                     throw new ArgumentException("No item exists with the supplied Id");
                 }
 
+                itemList.Add(item);
+
                 if (!currentLinkedChildrenIds.Contains(guidId))
                 {
-                    itemList.Add(item);
-
                     list.Add(LinkedChild.Create(item));
                     linkedChildrenList.Add(item);
                 }

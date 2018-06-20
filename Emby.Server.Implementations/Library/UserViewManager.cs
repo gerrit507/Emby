@@ -59,7 +59,7 @@ namespace Emby.Server.Implementations.Library
 
                 if (UserView.IsUserSpecific(folder))
                 {
-                    list.Add(_libraryManager.GetNamedView(user, folder.Name, folder.Id, folderViewType, null));
+                    list.Add(_libraryManager.GetNamedView(user, folder.Name, folder.Id.ToString("N"), folderViewType, null));
                     continue;
                 }
 
@@ -111,7 +111,7 @@ namespace Emby.Server.Implementations.Library
 
                 list.AddRange(channels);
 
-                if (_liveTvManager.GetEnabledUsers().Select(i => i.Id).Contains(query.UserId))
+                if (_liveTvManager.GetEnabledUsers().Select(i => i.Id.ToString("N")).Contains(query.UserId))
                 {
                     list.Add(_liveTvManager.GetInternalLiveTvFolder(CancellationToken.None));
                 }
@@ -136,7 +136,7 @@ namespace Emby.Server.Implementations.Library
                         var view = i as UserView;
                         if (view != null)
                         {
-                            if (!view.DisplayParentId.Equals(Guid.Empty))
+                            if (view.DisplayParentId != Guid.Empty)
                             {
                                 index = orders.IndexOf(view.DisplayParentId.ToString("N"));
                             }
@@ -150,14 +150,14 @@ namespace Emby.Server.Implementations.Library
                 .ToArray();
         }
 
-        public UserView GetUserSubViewWithName(string name, Guid parentId, string type, string sortName)
+        public UserView GetUserSubViewWithName(string name, string parentId, string type, string sortName)
         {
             var uniqueId = parentId + "subview" + type;
 
             return _libraryManager.GetNamedView(name, parentId, type, sortName, uniqueId);
         }
 
-        public UserView GetUserSubView(Guid parentId, string type, string localizationKey, string sortName)
+        public UserView GetUserSubView(string parentId, string type, string localizationKey, string sortName)
         {
             var name = _localizationManager.GetLocalizedString(localizationKey);
 
@@ -234,7 +234,7 @@ namespace Emby.Server.Implementations.Library
 
             var parents = new List<BaseItem>();
 
-            if (!parentId.Equals(Guid.Empty))
+            if (!string.IsNullOrEmpty(parentId))
             {
                 var parentItem = _libraryManager.GetItemById(parentId);
                 var parentItemChannel = parentItem as Channel;
@@ -242,7 +242,7 @@ namespace Emby.Server.Implementations.Library
                 {
                     return _channelManager.GetLatestChannelItemsInternal(new InternalItemsQuery(user)
                     {
-                        ChannelIds = new [] { parentId },
+                        ChannelIds = new Guid[] { new Guid(request.ParentId) },
                         IsPlayed = request.IsPlayed,
                         StartIndex = request.StartIndex,
                         Limit = request.Limit,
@@ -342,12 +342,12 @@ namespace Emby.Server.Implementations.Library
                 typeof(MusicGenre).Name,
                 typeof(Genre).Name
 
-            } : Array.Empty<string>();
+            } : new string[] { };
 
             var query = new InternalItemsQuery(user)
             {
                 IncludeItemTypes = includeItemTypes,
-                OrderBy = new[] { new ValueTuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending) },
+                OrderBy = new[] { new Tuple<string, SortOrder>(ItemSortBy.DateCreated, SortOrder.Descending) },
                 IsFolder = includeItemTypes.Length == 0 ? false : (bool?)null,
                 ExcludeItemTypes = excludeItemTypes,
                 IsVirtualItem = false,

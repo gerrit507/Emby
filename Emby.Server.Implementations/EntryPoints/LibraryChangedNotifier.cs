@@ -316,7 +316,7 @@ namespace Emby.Server.Implementations.EntryPoints
         private async void SendChangeNotifications(List<BaseItem> itemsAdded, List<BaseItem> itemsUpdated, List<BaseItem> itemsRemoved, List<Folder> foldersAddedTo, List<Folder> foldersRemovedFrom, CancellationToken cancellationToken)
         {
             var userIds = _sessionManager.Sessions
-                .Select(i => i.UserId)
+                .Select(i => i.UserId ?? Guid.Empty)
                 .Where(i => !i.Equals(Guid.Empty))
                 .Distinct()
                 .ToArray();
@@ -335,14 +335,11 @@ namespace Emby.Server.Implementations.EntryPoints
                     return;
                 }
 
-                if (info.IsEmpty)
-                {
-                    continue;
-                }
+                var userIdString = userId.ToString("N");
 
                 try
                 {
-                    await _sessionManager.SendMessageToUserSessions(new List<Guid> { userId }, "LibraryChanged", info, cancellationToken).ConfigureAwait(false);
+                    await _sessionManager.SendMessageToUserSessions(new List<string> { userIdString }, "LibraryChanged", info, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {

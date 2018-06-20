@@ -189,7 +189,7 @@ namespace MediaBrowser.Providers.Movies
                         Width = width,
                         Height = height,
                         ProviderName = Name,
-                        Url = url,
+                        Url = url.Replace("http://", "https://", StringComparison.OrdinalIgnoreCase),
                         Language = i.lang
                     };
 
@@ -305,6 +305,7 @@ namespace MediaBrowser.Providers.Movies
             }
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         internal Task EnsureMovieJson(string id, CancellationToken cancellationToken)
         {
             var path = GetFanartJsonPath(id);
@@ -315,7 +316,7 @@ namespace MediaBrowser.Providers.Movies
             {
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 3)
                 {
-                    return Task.CompletedTask;
+                    return _cachedTask;
                 }
             }
 

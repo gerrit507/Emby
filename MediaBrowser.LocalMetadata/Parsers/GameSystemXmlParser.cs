@@ -12,13 +12,14 @@ namespace MediaBrowser.LocalMetadata.Parsers
 {
     public class GameSystemXmlParser : BaseItemXmlParser<GameSystem>
     {
+        private readonly Task _cachedTask = Task.FromResult(true);
         public Task FetchAsync(MetadataResult<GameSystem> item, string metadataFile, CancellationToken cancellationToken)
         {
             Fetch(item, metadataFile, cancellationToken);
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            return Task.CompletedTask;
+            return _cachedTask;
         }
 
         /// <summary>

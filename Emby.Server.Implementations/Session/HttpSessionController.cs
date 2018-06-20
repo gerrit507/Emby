@@ -48,7 +48,7 @@ namespace Emby.Server.Implementations.Session
         {
             get
             {
-                return (DateTime.UtcNow - Session.LastActivityDate).TotalMinutes <= 5;
+                return (DateTime.UtcNow - Session.LastActivityDate).TotalMinutes <= 10;
             }
         }
 
@@ -62,24 +62,28 @@ namespace Emby.Server.Implementations.Session
             return SendMessage(name, messageId, new Dictionary<string, string>(), cancellationToken);
         }
 
-        private Task SendMessage(string name, string messageId, Dictionary<string, string> args, CancellationToken cancellationToken)
+        private async Task SendMessage(string name, string messageId, Dictionary<string, string> args, CancellationToken cancellationToken)
         {
             args["messageId"] = messageId;
             var url = PostUrl + "/" + name + ToQueryString(args);
 
-            return SendRequest(new HttpRequestOptions
+            using ((await _httpClient.Post(new HttpRequestOptions
             {
                 Url = url,
                 CancellationToken = cancellationToken,
                 BufferContent = false
-            });
+
+            }).ConfigureAwait(false)))
+            {
+
+            }
         }
 
         private Task SendPlayCommand(PlayRequest command, string messageId, CancellationToken cancellationToken)
         {
             var dict = new Dictionary<string, string>();
 
-            dict["ItemIds"] = string.Join(",", command.ItemIds.Select(i => i.ToString("N")).ToArray());
+            dict["ItemIds"] = string.Join(",", command.ItemIds);
 
             if (command.StartPositionTicks.HasValue)
             {
@@ -127,7 +131,7 @@ namespace Emby.Server.Implementations.Session
         {
             if (!IsSessionActive)
             {
-                return Task.CompletedTask;
+                return Task.FromResult(true);
             }
 
             if (string.Equals(name, "Play", StringComparison.OrdinalIgnoreCase))
@@ -146,7 +150,7 @@ namespace Emby.Server.Implementations.Session
 
             if (!_supportedMessages.Contains(name, StringComparer.OrdinalIgnoreCase))
             {
-                return Task.CompletedTask;
+                return Task.FromResult(true);
             }
 
             var url = PostUrl + "/" + name;
@@ -178,15 +182,12 @@ namespace Emby.Server.Implementations.Session
                 }
             }
 
-            return SendRequest(options);
-        }
-
-        private async Task SendRequest(HttpRequestOptions options)
-        {
-            using (var response = await _httpClient.Post(options).ConfigureAwait(false))
+            return _httpClient.Post(new HttpRequestOptions
             {
-
-            }
+                Url = url,
+                CancellationToken = cancellationToken,
+                BufferContent = false
+            });
         }
 
         private string ToQueryString(Dictionary<string, string> nvc)

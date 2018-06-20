@@ -71,11 +71,11 @@ namespace MediaBrowser.Providers.Music
 
         private void ProcessResult(MusicArtist item, Artist result, string preferredLanguage)
         {
-            //item.HomePageUrl = result.strWebsite;
+            item.HomePageUrl = result.strWebsite;
 
             if (!string.IsNullOrEmpty(result.strGenre))
             {
-                item.Genres = new [] { result.strGenre };
+                item.Genres = new List<string> { result.strGenre };
             }
 
             item.SetProviderId(MetadataProviders.AudioDbArtist, result.idArtist);
@@ -121,6 +121,7 @@ namespace MediaBrowser.Providers.Music
             get { return "TheAudioDB"; }
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         internal Task EnsureArtistInfo(string musicBrainzId, CancellationToken cancellationToken)
         {
             var xmlPath = GetArtistInfoPath(_config.ApplicationPaths, musicBrainzId);
@@ -131,7 +132,7 @@ namespace MediaBrowser.Providers.Music
             {
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 7)
                 {
-                    return Task.CompletedTask;
+                    return _cachedTask;
                 }
             }
 

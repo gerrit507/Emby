@@ -42,7 +42,7 @@ namespace Emby.Server.Implementations.EntryPoints
 
             if (_appHost.IsFirstRun)
             {
-                BrowserLauncher.OpenWizard(_appHost);
+                BrowserLauncher.OpenDashboardPage("wizardstart.html", _appHost);
             }
             else if (_config.Configuration.IsStartupWizardCompleted && _config.Configuration.AutoRunWebApp)
             {
@@ -50,7 +50,7 @@ namespace Emby.Server.Implementations.EntryPoints
 
                 if (!options.ContainsOption("-noautorunwebapp"))
                 {
-                    BrowserLauncher.OpenWebApp(_appHost);
+                    BrowserLauncher.OpenDashboardPage("index.html", _appHost);
                 }
             }
         }

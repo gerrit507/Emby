@@ -137,7 +137,7 @@ namespace MediaBrowser.ServerApplication
 
         void notifyIcon1_DoubleClick(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebApp(_appHost);
+            BrowserLauncher.OpenDashboard(_appHost);
         }
 
         private void LocalizeText()
@@ -169,22 +169,22 @@ namespace MediaBrowser.ServerApplication
 
         void cmdBrowse_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebApp(_appHost);
+            BrowserLauncher.OpenWebClient(_appHost);
         }
 
         void cmdPremiere_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebApp(_appHost);
+            BrowserLauncher.OpenEmbyPremiere(_appHost);
         }
 
         void cmdCommunity_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebApp(_appHost);
+            BrowserLauncher.OpenCommunity(_appHost);
         }
 
         void cmdConfigure_Click(object sender, EventArgs e)
         {
-            BrowserLauncher.OpenWebApp(_appHost);
+            BrowserLauncher.OpenDashboard(_appHost);
         }
 
         void cmdRestart_Click(object sender, EventArgs e)

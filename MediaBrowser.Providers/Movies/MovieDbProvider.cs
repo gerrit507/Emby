@@ -156,7 +156,7 @@ namespace MediaBrowser.Providers.Movies
             {
                 using (var json = response.Content)
                 {
-                    _tmdbSettings = await _jsonSerializer.DeserializeFromStreamAsync<TmdbSettingsResult>(json).ConfigureAwait(false);
+                    _tmdbSettings = _jsonSerializer.DeserializeFromStream<TmdbSettingsResult>(json);
 
                     return _tmdbSettings;
                 }
@@ -211,6 +211,7 @@ namespace MediaBrowser.Providers.Movies
             _jsonSerializer.SerializeToFile(mainResult, dataFilePath);
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         internal Task EnsureMovieInfo(string tmdbId, string language, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(tmdbId))
@@ -227,7 +228,7 @@ namespace MediaBrowser.Providers.Movies
                 // If it's recent or automatic updates are enabled, don't re-download
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 3)
                 {
-                    return Task.CompletedTask;
+                    return _cachedTask;
                 }
             }
 
@@ -355,7 +356,7 @@ namespace MediaBrowser.Providers.Movies
                 {
                     using (var json = response.Content)
                     {
-                        mainResult = await _jsonSerializer.DeserializeFromStreamAsync<CompleteMovieData>(json).ConfigureAwait(false);
+                        mainResult = _jsonSerializer.DeserializeFromStream<CompleteMovieData>(json);
                     }
                 }
             }
@@ -400,7 +401,7 @@ namespace MediaBrowser.Providers.Movies
                 {
                     using (var json = response.Content)
                     {
-                        var englishResult = await _jsonSerializer.DeserializeFromStreamAsync<CompleteMovieData>(json).ConfigureAwait(false);
+                        var englishResult = _jsonSerializer.DeserializeFromStream<CompleteMovieData>(json);
 
                         mainResult.overview = englishResult.overview;
                     }
@@ -639,7 +640,7 @@ namespace MediaBrowser.Providers.Movies
         {
             get
             {
-                return 1;
+                return 0;
             }
         }
 

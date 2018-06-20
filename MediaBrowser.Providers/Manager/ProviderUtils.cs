@@ -63,9 +63,18 @@ namespace MediaBrowser.Providers.Manager
 
             if (!lockedFields.Contains(MetadataFields.Genres))
             {
-                if (replaceData || target.Genres.Length == 0)
+                if (replaceData || target.Genres.Count == 0)
                 {
                     target.Genres = source.Genres;
+                }
+            }
+
+            if (replaceData || string.IsNullOrEmpty(target.HomePageUrl))
+            {
+                target.HomePageUrl = source.HomePageUrl;
+                if (!string.IsNullOrWhiteSpace(target.HomePageUrl) && target.HomePageUrl.IndexOf("http", StringComparison.OrdinalIgnoreCase) != 0)
+                {
+                    target.HomePageUrl = "http://" + target.HomePageUrl;
                 }
             }
 

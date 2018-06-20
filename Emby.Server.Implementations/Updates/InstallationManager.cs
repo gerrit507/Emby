@@ -19,7 +19,6 @@ using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Model.Updates;
-using MediaBrowser.Controller.Configuration;
 
 namespace Emby.Server.Implementations.Updates
 {
@@ -112,7 +111,7 @@ namespace Emby.Server.Implementations.Updates
         private readonly IHttpClient _httpClient;
         private readonly IJsonSerializer _jsonSerializer;
         private readonly ISecurityManager _securityManager;
-        private readonly IServerConfigurationManager _config;
+        private readonly IConfigurationManager _config;
         private readonly IFileSystem _fileSystem;
 
         /// <summary>
@@ -126,7 +125,7 @@ namespace Emby.Server.Implementations.Updates
         // netframework or netcore
         private readonly string _packageRuntime;
 
-        public InstallationManager(ILogger logger, IApplicationHost appHost, IApplicationPaths appPaths, IHttpClient httpClient, IJsonSerializer jsonSerializer, ISecurityManager securityManager, IServerConfigurationManager config, IFileSystem fileSystem, ICryptoProvider cryptographyProvider, string packageRuntime)
+        public InstallationManager(ILogger logger, IApplicationHost appHost, IApplicationPaths appPaths, IHttpClient httpClient, IJsonSerializer jsonSerializer, ISecurityManager securityManager, IConfigurationManager config, IFileSystem fileSystem, ICryptoProvider cryptographyProvider, string packageRuntime)
         {
             if (logger == null)
             {
@@ -190,7 +189,7 @@ namespace Emby.Server.Implementations.Updates
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        var packages = await _jsonSerializer.DeserializeFromStreamAsync<PackageInfo[]>(json).ConfigureAwait(false);
+                        var packages = _jsonSerializer.DeserializeFromStream<PackageInfo[]>(json);
 
                         return FilterPackages(packages, packageType, applicationVersion);
                     }
@@ -203,6 +202,8 @@ namespace Emby.Server.Implementations.Updates
                 return FilterPackages(packages, packageType, applicationVersion);
             }
         }
+
+        private readonly SemaphoreSlim _updateSemaphore = new SemaphoreSlim(1, 1);
 
         /// <summary>
         /// Gets all available packages.
@@ -217,13 +218,14 @@ namespace Emby.Server.Implementations.Updates
                 CancellationToken = cancellationToken,
                 Progress = new SimpleProgress<Double>(),
                 CacheLength = GetCacheLength(),
-                CacheMode = CacheMode.Unconditional
+                CacheMode = CacheMode.Unconditional,
+                ResourcePool = _updateSemaphore
 
             }, "GET").ConfigureAwait(false))
             {
                 using (var stream = response.Content)
                 {
-                    return FilterPackages(await _jsonSerializer.DeserializeFromStreamAsync<PackageInfo[]>(stream).ConfigureAwait(false));
+                    return FilterPackages(_jsonSerializer.DeserializeFromStream<PackageInfo[]>(stream));
                 }
             }
         }
@@ -434,7 +436,7 @@ namespace Emby.Server.Implementations.Updates
 
             var installationInfo = new InstallationInfo
             {
-                Id = Guid.NewGuid(),
+                Id = Guid.NewGuid().ToString("N"),
                 Name = package.name,
                 AssemblyGuid = package.guid,
                 UpdateClass = package.classification,
@@ -518,6 +520,7 @@ namespace Emby.Server.Implementations.Updates
             finally
             {
                 // Dispose the progress object and remove the installation from the in-progress list
+                innerProgress.Dispose();
                 tuple.Item2.Dispose();
             }
         }
@@ -532,23 +535,16 @@ namespace Emby.Server.Implementations.Updates
         /// <returns>Task.</returns>
         private async Task InstallPackageInternal(PackageVersionInfo package, bool isPlugin, IProgress<double> progress, CancellationToken cancellationToken)
         {
-            IPlugin plugin = null;
-
-            if (isPlugin)
-            {
-                // Set last update time if we were installed before
-                plugin = _applicationHost.Plugins.FirstOrDefault(p => string.Equals(p.Id.ToString(), package.guid, StringComparison.OrdinalIgnoreCase))
-                           ?? _applicationHost.Plugins.FirstOrDefault(p => p.Name.Equals(package.name, StringComparison.OrdinalIgnoreCase));
-            }
-
-            string targetPath = plugin == null ? null : plugin.AssemblyFilePath;
-
             // Do the install
-            await PerformPackageInstallation(progress, targetPath, package, cancellationToken).ConfigureAwait(false);
+            await PerformPackageInstallation(progress, package, cancellationToken).ConfigureAwait(false);
 
             // Do plugin-specific processing
             if (isPlugin)
             {
+                // Set last update time if we were installed before
+                var plugin = _applicationHost.Plugins.FirstOrDefault(p => string.Equals(p.Id.ToString(), package.guid, StringComparison.OrdinalIgnoreCase))
+                            ?? _applicationHost.Plugins.FirstOrDefault(p => p.Name.Equals(package.name, StringComparison.OrdinalIgnoreCase));
+
                 if (plugin != null)
                 {
                     OnPluginUpdated(plugin, package);
@@ -560,17 +556,13 @@ namespace Emby.Server.Implementations.Updates
             }
         }
 
-        private async Task PerformPackageInstallation(IProgress<double> progress, string target, PackageVersionInfo package, CancellationToken cancellationToken)
+        private async Task PerformPackageInstallation(IProgress<double> progress, PackageVersionInfo package, CancellationToken cancellationToken)
         {
             // Target based on if it is an archive or single assembly
             //  zip archives are assumed to contain directory structures relative to our ProgramDataPath
             var extension = Path.GetExtension(package.targetFilename);
             var isArchive = string.Equals(extension, ".zip", StringComparison.OrdinalIgnoreCase) || string.Equals(extension, ".rar", StringComparison.OrdinalIgnoreCase) || string.Equals(extension, ".7z", StringComparison.OrdinalIgnoreCase);
-
-            if (target == null)
-            {
-                target = Path.Combine(isArchive ? _appPaths.TempUpdatePath : _appPaths.PluginsPath, package.targetFilename);
-            }
+            var target = Path.Combine(isArchive ? _appPaths.TempUpdatePath : _appPaths.PluginsPath, package.targetFilename);
 
             // Download to temporary file so that, if interrupted, it won't destroy the existing installation
             var tempFile = await _httpClient.GetTempFile(new HttpRequestOptions
@@ -585,7 +577,7 @@ namespace Emby.Server.Implementations.Updates
 
             // Validate with a checksum
             var packageChecksum = string.IsNullOrWhiteSpace(package.checksum) ? Guid.Empty : new Guid(package.checksum);
-            if (!packageChecksum.Equals(Guid.Empty)) // support for legacy uploads for now
+            if (packageChecksum != Guid.Empty) // support for legacy uploads for now
             {
                 using (var stream = _fileSystem.OpenRead(tempFile))
                 {
@@ -652,15 +644,6 @@ namespace Emby.Server.Implementations.Updates
             }
 
             _fileSystem.DeleteFile(path);
-
-            var list = _config.Configuration.UninstalledPlugins.ToList();
-            var filename = Path.GetFileName(path);
-            if (!list.Contains(filename, StringComparer.OrdinalIgnoreCase))
-            {
-                list.Add(filename);
-                _config.Configuration.UninstalledPlugins = list.ToArray();
-                _config.SaveConfiguration();
-            }
 
             OnPluginUninstalled(plugin);
 

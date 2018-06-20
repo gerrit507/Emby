@@ -14,7 +14,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Services;
-using MediaBrowser.Controller.Authentication;
 
 namespace MediaBrowser.Api
 {
@@ -52,7 +51,22 @@ namespace MediaBrowser.Api
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
-        public Guid Id { get; set; }
+        public string Id { get; set; }
+    }
+
+    /// <summary>
+    /// Class GetUser
+    /// </summary>
+    [Route("/Users/{Id}/Offline", "GET", Summary = "Gets an offline user record by Id")]
+    [Authenticated]
+    public class GetOfflineUser : IReturn<UserDto>
+    {
+        /// <summary>
+        /// Gets or sets the id.
+        /// </summary>
+        /// <value>The id.</value>
+        [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
+        public string Id { get; set; }
     }
 
     /// <summary>
@@ -67,7 +81,7 @@ namespace MediaBrowser.Api
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "DELETE")]
-        public Guid Id { get; set; }
+        public string Id { get; set; }
     }
 
     /// <summary>
@@ -81,7 +95,7 @@ namespace MediaBrowser.Api
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
-        public Guid Id { get; set; }
+        public string Id { get; set; }
 
         [ApiMember(Name = "Pw", IsRequired = true, DataType = "string", ParameterType = "body", Verb = "POST")]
         public string Pw { get; set; }
@@ -116,6 +130,9 @@ namespace MediaBrowser.Api
 
         [ApiMember(Name = "Pw", IsRequired = true, DataType = "string", ParameterType = "body", Verb = "POST")]
         public string Pw { get; set; }
+
+        [ApiMember(Name = "PasswordMd5", IsRequired = true, DataType = "string", ParameterType = "body", Verb = "POST")]
+        public string PasswordMd5 { get; set; }
     }
 
     /// <summary>
@@ -129,7 +146,7 @@ namespace MediaBrowser.Api
         /// Gets or sets the id.
         /// </summary>
         /// <value>The id.</value>
-        public Guid Id { get; set; }
+        public string Id { get; set; }
 
         /// <summary>
         /// Gets or sets the password.
@@ -159,7 +176,7 @@ namespace MediaBrowser.Api
         /// Gets or sets the id.
         /// </summary>
         /// <value>The id.</value>
-        public Guid Id { get; set; }
+        public string Id { get; set; }
 
         /// <summary>
         /// Gets or sets the new password.
@@ -193,7 +210,7 @@ namespace MediaBrowser.Api
     public class UpdateUserPolicy : UserPolicy, IReturnVoid
     {
         [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
-        public Guid Id { get; set; }
+        public string Id { get; set; }
     }
 
     /// <summary>
@@ -204,7 +221,7 @@ namespace MediaBrowser.Api
     public class UpdateUserConfiguration : UserConfiguration, IReturnVoid
     {
         [ApiMember(Name = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
-        public Guid Id { get; set; }
+        public string Id { get; set; }
     }
 
     /// <summary>
@@ -273,7 +290,7 @@ namespace MediaBrowser.Api
                 IsHidden = false,
                 IsDisabled = false
 
-            }, true, true);
+            }, true);
         }
 
         /// <summary>
@@ -283,10 +300,10 @@ namespace MediaBrowser.Api
         /// <returns>System.Object.</returns>
         public object Get(GetUsers request)
         {
-            return Get(request, false, false);
+            return Get(request, false);
         }
 
-        private object Get(GetUsers request, bool filterByDevice, bool filterByNetwork)
+        private object Get(GetUsers request, bool filterByDevice)
         {
             var users = _userManager.Users;
 
@@ -315,12 +332,9 @@ namespace MediaBrowser.Api
                 }
             }
 
-            if (filterByNetwork)
+            if (!_networkManager.IsInLocalNetwork(Request.RemoteIp))
             {
-                if (!_networkManager.IsInLocalNetwork(Request.RemoteIp))
-                {
-                    users = users.Where(i => i.Policy.EnableRemoteAccess);
-                }
+                users = users.Where(i => i.Policy.EnableRemoteAccess);
             }
 
             var result = users
@@ -350,6 +364,20 @@ namespace MediaBrowser.Api
             return ToOptimizedResult(result);
         }
 
+        public object Get(GetOfflineUser request)
+        {
+            var user = _userManager.GetUserById(request.Id);
+
+            if (user == null)
+            {
+                throw new ResourceNotFoundException("User not found");
+            }
+
+            var result = _userManager.GetOfflineUserDto(user);
+
+            return ToOptimizedResult(result);
+        }
+
         /// <summary>
         /// Deletes the specified request.
         /// </summary>
@@ -368,7 +396,7 @@ namespace MediaBrowser.Api
                 throw new ResourceNotFoundException("User not found");
             }
 
-            _sessionMananger.RevokeUserTokens(user.Id, null);
+            _sessionMananger.RevokeUserTokens(user.Id.ToString("N"), null);
 
             return _userManager.DeleteUser(user);
         }
@@ -406,6 +434,7 @@ namespace MediaBrowser.Api
                 DeviceName = auth.Device,
                 Password = request.Pw,
                 PasswordSha1 = request.Password,
+                PasswordMd5 = request.PasswordMd5,
                 RemoteEndPoint = Request.RemoteIp,
                 Username = request.Username
 
@@ -440,7 +469,7 @@ namespace MediaBrowser.Api
             }
             else
             {
-                var success = await _userManager.AuthenticateUser(user.Name, request.CurrentPw, request.CurrentPassword, Request.RemoteIp, false).ConfigureAwait(false);
+                var success = await _userManager.AuthenticateUser(user.Name, request.CurrentPw, request.CurrentPassword, null, Request.RemoteIp, false).ConfigureAwait(false);
 
                 if (success == null)
                 {
@@ -451,7 +480,7 @@ namespace MediaBrowser.Api
 
                 var currentToken = _authContext.GetAuthorizationInfo(Request).Token;
 
-                _sessionMananger.RevokeUserTokens(user.Id, currentToken);
+                _sessionMananger.RevokeUserTokens(user.Id.ToString("N"), currentToken);
             }
         }
 
@@ -484,7 +513,7 @@ namespace MediaBrowser.Api
         {
             var id = GetPathValue(1);
 
-            AssertCanUpdateUser(_authContext, _userManager, new Guid(id), false);
+            AssertCanUpdateUser(_authContext, _userManager, id, false);
 
             var dtoUser = request;
 
@@ -576,7 +605,7 @@ namespace MediaBrowser.Api
                 }
 
                 var currentToken = _authContext.GetAuthorizationInfo(Request).Token;
-                _sessionMananger.RevokeUserTokens(user.Id, currentToken);
+                _sessionMananger.RevokeUserTokens(user.Id.ToString("N"), currentToken);
             }
 
             _userManager.UpdateUserPolicy(request.Id, request);

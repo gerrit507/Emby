@@ -12,6 +12,7 @@ namespace Mono.Nat
     public class NatManager : IDisposable
     {
         public event EventHandler<DeviceEventArgs> DeviceFound;
+        public event EventHandler<DeviceEventArgs> DeviceLost;
 
         private List<ISearcher> controllers = new List<ISearcher>();
 
@@ -39,6 +40,7 @@ namespace Mono.Nat
                 foreach (var searcher in controllers)
                 {
                     searcher.DeviceFound += Searcher_DeviceFound;
+                    searcher.DeviceLost += Searcher_DeviceLost;
                 }
             }
         }
@@ -80,6 +82,14 @@ namespace Mono.Nat
             if (DeviceFound != null)
             {
                 DeviceFound(sender, e);
+            }
+        }
+
+        private void Searcher_DeviceLost(object sender, DeviceEventArgs e)
+        {
+            if (DeviceLost != null)
+            {
+                DeviceLost(sender, e);
             }
         }
     }

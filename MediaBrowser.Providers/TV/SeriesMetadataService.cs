@@ -30,23 +30,26 @@ namespace MediaBrowser.Providers.TV
         {
             await base.AfterMetadataRefresh(item, refreshOptions, cancellationToken).ConfigureAwait(false);
 
-            var seasonProvider = new DummySeasonProvider(ServerConfigurationManager, Logger, _localization, LibraryManager, FileSystem);
-            await seasonProvider.Run(item, cancellationToken).ConfigureAwait(false);
-
-            var provider = new MissingEpisodeProvider(Logger,
-                ServerConfigurationManager,
-                LibraryManager,
-                _localization,
-                FileSystem,
-                _xmlSettings);
-
-            try
+            if (refreshOptions.IsPostRecursiveRefresh)
             {
-                await provider.Run(item, true, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Logger.ErrorException("Error in DummySeasonProvider", ex);
+                var seasonProvider = new DummySeasonProvider(ServerConfigurationManager, Logger, _localization, LibraryManager, FileSystem);
+                await seasonProvider.Run(item, cancellationToken).ConfigureAwait(false);
+
+                var provider = new MissingEpisodeProvider(Logger, 
+                    ServerConfigurationManager, 
+                    LibraryManager, 
+                    _localization, 
+                    FileSystem,
+                    _xmlSettings);
+
+                try
+                {
+                    await provider.Run(item, true, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.ErrorException("Error in DummySeasonProvider", ex);
+                }
             }
         }
 

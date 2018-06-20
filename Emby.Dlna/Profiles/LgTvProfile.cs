@@ -3,7 +3,7 @@ using System.Xml.Serialization;
 
 namespace Emby.Dlna.Profiles
 {
-    [System.Xml.Serialization.XmlRoot("Profile")]
+    [XmlRoot("Profile")]
     public class LgTvProfile : DefaultProfile
     {
         public LgTvProfile()
@@ -53,7 +53,7 @@ namespace Emby.Dlna.Profiles
             {
                 new DirectPlayProfile
                 {
-                    Container = "ts,mpegts,avi,mkv,m2ts",
+                    Container = "ts,mpegts,avi,mkv",
                     VideoCodec = "h264",
                     AudioCodec = "aac,ac3,eac3,mp3,dca,dts",
                     Type = DlnaProfileType.Video

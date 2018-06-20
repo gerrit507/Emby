@@ -110,14 +110,14 @@ namespace Emby.Server.Implementations.Security
                 {
                     lock (_fileLock)
                     {
-                        _fileSystem.WriteAllBytes(licenseFile, Array.Empty<byte>());
+                        _fileSystem.WriteAllBytes(licenseFile, new byte[] { });
                     }
                 }
                 catch (IOException)
                 {
                     lock (_fileLock)
                     {
-                        _fileSystem.WriteAllBytes(licenseFile, Array.Empty<byte>());
+                        _fileSystem.WriteAllBytes(licenseFile, new byte[] { });
                     }
                 }
             }

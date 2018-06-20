@@ -58,7 +58,7 @@ namespace Emby.Server.Implementations.HttpServer
         /// <param name="source">The source.</param>
         /// <param name="contentType">Type of the content.</param>
         /// <param name="isHeadRequest">if set to <c>true</c> [is head request].</param>
-        public RangeRequestWriter(string rangeHeader, long? contentLength, Stream source, string contentType, bool isHeadRequest, ILogger logger)
+        public RangeRequestWriter(string rangeHeader, Stream source, string contentType, bool isHeadRequest, ILogger logger)
         {
             if (string.IsNullOrEmpty(contentType))
             {
@@ -76,17 +76,17 @@ namespace Emby.Server.Implementations.HttpServer
             StatusCode = HttpStatusCode.PartialContent;
 
             Cookies = new List<Cookie>();
-            SetRangeValues(contentLength);
+            SetRangeValues();
         }
 
         /// <summary>
         /// Sets the range values.
         /// </summary>
-        private void SetRangeValues(long? contentLength)
+        private void SetRangeValues()
         {
             var requestedRange = RequestedRanges[0];
 
-            TotalContentLength = contentLength ?? SourceStream.Length;
+            TotalContentLength = SourceStream.Length;
 
             // If the requested range is "0-", we can optimize by just doing a stream copy
             if (!requestedRange.Value.HasValue)
@@ -105,7 +105,7 @@ namespace Emby.Server.Implementations.HttpServer
             Headers["Content-Length"] = RangeLength.ToString(UsCulture);
             Headers["Content-Range"] = string.Format("bytes {0}-{1}/{2}", RangeStart, RangeEnd, TotalContentLength);
 
-            if (RangeStart > 0 && SourceStream.CanSeek)
+            if (RangeStart > 0)
             {
                 SourceStream.Position = RangeStart;
             }

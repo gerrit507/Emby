@@ -11,8 +11,6 @@ using MediaBrowser.Model.IO;
 using SocketHttpListener.Net.WebSockets;
 using SocketHttpListener.Primitives;
 using HttpStatusCode = SocketHttpListener.Net.HttpStatusCode;
-using System.Net.Sockets;
-using WebSocketState = System.Net.WebSockets.WebSocketState;
 
 namespace SocketHttpListener
 {
@@ -53,6 +51,9 @@ namespace SocketHttpListener
         private Stream _stream;
         private Uri _uri;
         private const string _version = "13";
+        private readonly IMemoryStreamFactory _memoryStreamFactory;
+
+        private readonly ICryptoProvider _cryptoProvider;
 
         #endregion
 
@@ -65,29 +66,43 @@ namespace SocketHttpListener
         #region Internal Constructors
 
         // As server
-        internal WebSocket(string protocol)
-        {
-            _protocol = protocol;
-        }
-
-        public void SetContext(HttpListenerWebSocketContext context, Action closeContextFn, Stream stream)
+        internal WebSocket(HttpListenerWebSocketContext context, string protocol, ICryptoProvider cryptoProvider, IMemoryStreamFactory memoryStreamFactory)
         {
             _context = context;
+            _protocol = protocol;
+            _cryptoProvider = cryptoProvider;
+            _memoryStreamFactory = memoryStreamFactory;
 
-            _closeContext = closeContextFn;
+            _closeContext = context.Close;
             _secure = context.IsSecureConnection;
-            _stream = stream;
+            _stream = context.Stream;
 
             init();
         }
 
-        public static TimeSpan DefaultKeepAliveInterval
+        #endregion
+
+        // As server
+        internal Func<WebSocketContext, string> CustomHandshakeRequestChecker
         {
-            // In the .NET Framework, this pulls the value from a P/Invoke.  Here we just hardcode it to a reasonable default.
-            get { return TimeSpan.FromSeconds(30); }
+            get
+            {
+                return _handshakeRequestChecker ?? (context => null);
+            }
+
+            set
+            {
+                _handshakeRequestChecker = value;
+            }
         }
 
-        #endregion
+        internal bool IsConnected
+        {
+            get
+            {
+                return _readyState == WebSocketState.Open || _readyState == WebSocketState.Closing;
+            }
+        }
 
         /// <summary>
         /// Gets the state of the WebSocket connection.
@@ -130,6 +145,44 @@ namespace SocketHttpListener
 
         #region Private Methods
 
+        // As server
+        private bool acceptHandshake()
+        {
+            var msg = checkIfValidHandshakeRequest(_context);
+            if (msg != null)
+            {
+                error("An error has occurred while connecting: " + msg);
+                Close(HttpStatusCode.BadRequest);
+
+                return false;
+            }
+
+            if (_protocol != null &&
+                !_context.SecWebSocketProtocols.Contains(protocol => protocol == _protocol))
+                _protocol = null;
+
+            ////var extensions = _context.Headers["Sec-WebSocket-Extensions"];
+            ////if (extensions != null && extensions.Length > 0)
+            ////    processSecWebSocketExtensionsHeader(extensions);
+
+            return sendHttpResponse(createHandshakeResponse());
+        }
+
+        // As server
+        private string checkIfValidHandshakeRequest(WebSocketContext context)
+        {
+            var headers = context.Headers;
+            return context.RequestUri == null
+                   ? "Invalid request url."
+                   : !context.IsWebSocketRequest
+                     ? "Not WebSocket connection request."
+                     : !validateSecWebSocketKeyHeader(headers["Sec-WebSocket-Key"])
+                       ? "Invalid Sec-WebSocket-Key header."
+                       : !validateSecWebSocketVersionClientHeader(headers["Sec-WebSocket-Version"])
+                         ? "Invalid Sec-WebSocket-Version header."
+                         : CustomHandshakeRequestChecker(context);
+        }
+
         private void close(CloseStatusCode code, string reason, bool wait)
         {
             close(new PayloadData(((ushort)code).Append(reason)), !code.IsReserved(), wait);
@@ -139,19 +192,20 @@ namespace SocketHttpListener
         {
             lock (_forConn)
             {
-                if (_readyState == WebSocketState.CloseSent || _readyState == WebSocketState.Closed)
+                if (_readyState == WebSocketState.Closing || _readyState == WebSocketState.Closed)
                 {
                     return;
                 }
 
-                _readyState = WebSocketState.CloseSent;
+                _readyState = WebSocketState.Closing;
             }
 
             var e = new CloseEventArgs(payload);
             e.WasClean =
               closeHandshake(
                   send ? WebSocketFrame.CreateCloseFrame(Mask.Unmask, payload).ToByteArray() : null,
-                  wait ? 1000 : 0);
+                  wait ? 1000 : 0,
+                  closeServerResources);
 
             _readyState = WebSocketState.Closed;
             try
@@ -164,15 +218,14 @@ namespace SocketHttpListener
             }
         }
 
-        private bool closeHandshake(byte[] frameAsBytes, int millisecondsTimeout)
+        private bool closeHandshake(byte[] frameAsBytes, int millisecondsTimeout, Action release)
         {
             var sent = frameAsBytes != null && writeBytes(frameAsBytes);
             var received =
               millisecondsTimeout == 0 ||
               (sent && _exitReceiving != null && _exitReceiving.WaitOne(millisecondsTimeout));
 
-            closeServerResources();
-
+            release();
             if (_receivePong != null)
             {
                 _receivePong.Dispose();
@@ -196,15 +249,7 @@ namespace SocketHttpListener
             if (_closeContext == null)
                 return;
 
-            try
-            {
-                _closeContext();
-            }
-            catch (SocketException)
-            {
-                // it could be unable to send the handshake response
-            }
-
+            _closeContext();
             _closeContext = null;
             _stream = null;
             _context = null;
@@ -271,6 +316,23 @@ namespace SocketHttpListener
         {
             var res = HttpResponse.CreateCloseResponse(code);
             res.Headers["Sec-WebSocket-Version"] = _version;
+
+            return res;
+        }
+
+        // As server
+        private HttpResponse createHandshakeResponse()
+        {
+            var res = HttpResponse.CreateWebSocketResponse();
+
+            var headers = res.Headers;
+            headers["Sec-WebSocket-Accept"] = CreateResponseKey(_base64Key);
+
+            if (_protocol != null)
+                headers["Sec-WebSocket-Protocol"] = _protocol;
+
+            if (_cookies.Count > 0)
+                res.SetCookies(_cookies);
 
             return res;
         }
@@ -628,6 +690,23 @@ namespace SocketHttpListener
             receive();
         }
 
+        // As server
+        private bool validateSecWebSocketKeyHeader(string value)
+        {
+            if (value == null || value.Length == 0)
+                return false;
+
+            _base64Key = value;
+            return true;
+        }
+
+        // As server
+        private bool validateSecWebSocketVersionClientHeader(string value)
+        {
+            return true;
+            //return value != null && value == _version;
+        }
+
         private bool writeBytes(byte[] data)
         {
             try
@@ -648,9 +727,9 @@ namespace SocketHttpListener
         // As server
         internal void Close(HttpResponse response)
         {
-            _readyState = WebSocketState.CloseSent;
-            sendHttpResponse(response);
+            _readyState = WebSocketState.Closing;
 
+            sendHttpResponse(response);
             closeServerResources();
 
             _readyState = WebSocketState.Closed;
@@ -667,13 +746,25 @@ namespace SocketHttpListener
         {
             try
             {
-                _readyState = WebSocketState.Open;
-                open();
+                if (acceptHandshake())
+                {
+                    _readyState = WebSocketState.Open;
+                    open();
+                }
             }
             catch (Exception ex)
             {
                 processException(ex, "An exception has occurred while connecting.");
             }
+        }
+
+        private string CreateResponseKey(string base64Key)
+        {
+            var buff = new StringBuilder(base64Key, 64);
+            buff.Append(_guid);
+            var src = _cryptoProvider.ComputeSHA1(Encoding.UTF8.GetBytes(buff.ToString()));
+
+            return Convert.ToBase64String(src);
         }
 
         #endregion
@@ -738,14 +829,12 @@ namespace SocketHttpListener
         /// <param name="data">
         /// An array of <see cref="byte"/> that represents the binary data to send.
         /// </param>
+        /// An Action&lt;bool&gt; delegate that references the method(s) called when the send is
+        /// complete. A <see cref="bool"/> passed to this delegate is <c>true</c> if the send is
+        /// complete successfully; otherwise, <c>false</c>.
         public Task SendAsync(byte[] data)
         {
-            if (data == null)
-            {
-                throw new ArgumentNullException("data");
-            }
-
-            var msg = _readyState.CheckIfOpen();
+            var msg = _readyState.CheckIfOpen() ?? data.CheckIfValidSendData();
             if (msg != null)
             {
                 throw new Exception(msg);
@@ -763,14 +852,12 @@ namespace SocketHttpListener
         /// <param name="data">
         /// A <see cref="string"/> that represents the text data to send.
         /// </param>
+        /// An Action&lt;bool&gt; delegate that references the method(s) called when the send is
+        /// complete. A <see cref="bool"/> passed to this delegate is <c>true</c> if the send is
+        /// complete successfully; otherwise, <c>false</c>.
         public Task SendAsync(string data)
         {
-            if (data == null)
-            {
-                throw new ArgumentNullException("data");
-            }
-
-            var msg = _readyState.CheckIfOpen();
+            var msg = _readyState.CheckIfOpen() ?? data.CheckIfValidSendData();
             if (msg != null)
             {
                 throw new Exception(msg);

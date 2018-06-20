@@ -326,7 +326,11 @@ namespace Emby.Server.Implementations.IO
                         IncludeSubdirectories = true
                     };
 
-                    newWatcher.InternalBufferSize = 65536;
+                    if (_environmentInfo.OperatingSystem == MediaBrowser.Model.System.OperatingSystem.Windows ||
+                    _environmentInfo.OperatingSystem == MediaBrowser.Model.System.OperatingSystem.OSX)
+                    {
+                        newWatcher.InternalBufferSize = 65536;
+                    }
 
                     newWatcher.NotifyFilter = NotifyFilters.CreationTime |
                         NotifyFilters.DirectoryName |
@@ -618,6 +622,7 @@ namespace Emby.Server.Implementations.IO
         {
             _disposed = true;
             Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>
@@ -649,6 +654,7 @@ namespace Emby.Server.Implementations.IO
 
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
         }
     }
 }

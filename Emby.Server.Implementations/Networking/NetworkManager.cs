@@ -76,16 +76,16 @@ namespace Emby.Server.Implementations.Networking
             }
         }
 
-        private IpAddressInfo[] _localIpAddresses;
+        private List<IpAddressInfo> _localIpAddresses;
         private readonly object _localIpAddressSyncLock = new object();
 
-        public IpAddressInfo[] GetLocalIpAddresses()
+        public List<IpAddressInfo> GetLocalIpAddresses()
         {
             lock (_localIpAddressSyncLock)
             {
                 if (_localIpAddresses == null)
                 {
-                    var addresses = GetLocalIpAddressesInternal().Result.Select(ToIpAddressInfo).ToArray();
+                    var addresses = GetLocalIpAddressesInternal().Result.Select(ToIpAddressInfo).ToList();
 
                     _localIpAddresses = addresses;
 
@@ -489,14 +489,7 @@ namespace Emby.Server.Implementations.Networking
                 {
                     try
                     {
-                        var physicalAddress = i.GetPhysicalAddress();
-
-                        if (physicalAddress == null)
-                        {
-                            return null;
-                        }
-
-                        return physicalAddress.ToString();
+                        return BitConverter.ToString(i.GetPhysicalAddress().GetAddressBytes());
                     }
                     catch (Exception ex)
                     {

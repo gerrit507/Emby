@@ -136,6 +136,9 @@ namespace Emby.Server.Implementations.IO
             if (result.Exists)
             {
                 result.IsDirectory = info.IsDirectory();
+                result.IsHidden = info.IsHidden();
+
+                result.IsReadOnly = !info.CanWrite();
 
                 if (info.IsFile())
                 {

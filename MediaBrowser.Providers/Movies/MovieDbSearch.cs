@@ -164,7 +164,7 @@ namespace MediaBrowser.Providers.Movies
             {
                 using (var json = response.Content)
                 {
-                    var searchResults = await _json.DeserializeFromStreamAsync<TmdbMovieSearchResults>(json).ConfigureAwait(false);
+                    var searchResults = _json.DeserializeFromStream<TmdbMovieSearchResults>(json);
 
                     var results = searchResults.results ?? new List<TmdbMovieSearchResult>();
 
@@ -219,7 +219,7 @@ namespace MediaBrowser.Providers.Movies
             {
                 using (var json = response.Content)
                 {
-                    var searchResults = await _json.DeserializeFromStreamAsync<TmdbTvSearchResults>(json).ConfigureAwait(false);
+                    var searchResults = _json.DeserializeFromStream<TmdbTvSearchResults>(json);
 
                     var results = searchResults.results ?? new List<TvResult>();
 

@@ -120,6 +120,17 @@ namespace SocketHttpListener
             return res;
         }
 
+        internal static HttpResponse CreateWebSocketResponse()
+        {
+            var res = new HttpResponse(HttpStatusCode.SwitchingProtocols);
+
+            var headers = res.Headers;
+            headers["Upgrade"] = "websocket";
+            headers["Connection"] = "Upgrade";
+
+            return res;
+        }
+
         #endregion
 
         #region Public Methods

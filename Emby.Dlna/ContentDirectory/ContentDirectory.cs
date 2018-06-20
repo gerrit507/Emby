@@ -1,4 +1,5 @@
 ﻿using MediaBrowser.Common.Net;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dlna;
 using MediaBrowser.Controller.Drawing;
@@ -25,9 +26,10 @@ namespace Emby.Dlna.ContentDirectory
         private readonly IServerConfigurationManager _config;
         private readonly IUserManager _userManager;
         private readonly ILocalizationManager _localization;
+        private readonly IChannelManager _channelManager;
         private readonly IMediaSourceManager _mediaSourceManager;
         private readonly IUserViewManager _userViewManager;
-        private readonly IMediaEncoder _mediaEncoder;
+        private readonly Func<IMediaEncoder> _mediaEncoder;
         protected readonly IXmlReaderSettingsFactory XmlReaderSettingsFactory;
         private readonly ITVSeriesManager _tvSeriesManager;
 
@@ -38,7 +40,7 @@ namespace Emby.Dlna.ContentDirectory
             IServerConfigurationManager config,
             IUserManager userManager,
             ILogger logger,
-            IHttpClient httpClient, ILocalizationManager localization, IMediaSourceManager mediaSourceManager, IUserViewManager userViewManager, IMediaEncoder mediaEncoder, IXmlReaderSettingsFactory xmlReaderSettingsFactory, ITVSeriesManager tvSeriesManager)
+            IHttpClient httpClient, ILocalizationManager localization, IChannelManager channelManager, IMediaSourceManager mediaSourceManager, IUserViewManager userViewManager, Func<IMediaEncoder> mediaEncoder, IXmlReaderSettingsFactory xmlReaderSettingsFactory, ITVSeriesManager tvSeriesManager)
             : base(logger, httpClient)
         {
             _dlna = dlna;
@@ -48,6 +50,7 @@ namespace Emby.Dlna.ContentDirectory
             _config = config;
             _userManager = userManager;
             _localization = localization;
+            _channelManager = channelManager;
             _mediaSourceManager = mediaSourceManager;
             _userViewManager = userViewManager;
             _mediaEncoder = mediaEncoder;
@@ -92,9 +95,10 @@ namespace Emby.Dlna.ContentDirectory
                 SystemUpdateId,
                 _config,
                 _localization,
+                _channelManager,
                 _mediaSourceManager,
                 _userViewManager,
-                _mediaEncoder,
+                _mediaEncoder(),
                 XmlReaderSettingsFactory,
                 _tvSeriesManager)
                 .ProcessControlRequest(request);

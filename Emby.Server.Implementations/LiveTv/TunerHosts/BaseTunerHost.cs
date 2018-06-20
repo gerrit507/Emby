@@ -16,7 +16,6 @@ using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Serialization;
-using MediaBrowser.Controller.Library;
 
 namespace Emby.Server.Implementations.LiveTv.TunerHosts
 {
@@ -169,9 +168,9 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
             return new List<MediaSourceInfo>();
         }
 
-        protected abstract Task<ILiveStream> GetChannelStream(TunerHostInfo tuner, ChannelInfo channel, string streamId, List<ILiveStream> currentLiveStreams, CancellationToken cancellationToken);
+        protected abstract Task<ILiveStream> GetChannelStream(TunerHostInfo tuner, ChannelInfo channel, string streamId, CancellationToken cancellationToken);
 
-        public async Task<ILiveStream> GetChannelStream(string channelId, string streamId, List<ILiveStream> currentLiveStreams, CancellationToken cancellationToken)
+        public async Task<ILiveStream> GetChannelStream(string channelId, string streamId, CancellationToken cancellationToken)
         {
             if (string.IsNullOrEmpty(channelId))
             {
@@ -212,7 +211,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts
 
                 try
                 {
-                    var liveStream = await GetChannelStream(host, channelInfo, streamId, currentLiveStreams, cancellationToken).ConfigureAwait(false);
+                    var liveStream = await GetChannelStream(host, channelInfo, streamId, cancellationToken).ConfigureAwait(false);
                     var startTime = DateTime.UtcNow;
                     await liveStream.Open(cancellationToken).ConfigureAwait(false);
                     var endTime = DateTime.UtcNow;

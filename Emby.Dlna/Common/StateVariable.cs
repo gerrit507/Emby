@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System;
 
 namespace Emby.Dlna.Common
 {
@@ -11,7 +10,7 @@ namespace Emby.Dlna.Common
 
         public bool SendsEvents { get; set; }
 
-        public string[] AllowedValues { get; set; }
+        public List<string> AllowedValues { get; set; }
 
         public override string ToString()
         {
@@ -20,7 +19,7 @@ namespace Emby.Dlna.Common
 
         public StateVariable()
         {
-            AllowedValues = Array.Empty<string>();
+            AllowedValues = new List<string>();
         }
     }
 }

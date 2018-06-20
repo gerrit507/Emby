@@ -105,7 +105,8 @@ namespace Mono.Nat.Pmp
 
                     while (attempt < PmpConstants.RetryAttempts)
                     {
-                        await udpClient.SendAsync(buffer, buffer.Length, new IPEndPoint(LocalAddress, PmpConstants.ServerPort));
+                        await udpClient.SendAsync(buffer, buffer.Length,
+                                new IPEndPoint(LocalAddress, PmpConstants.ServerPort));
 
                         if (attempt == 0)
                         {

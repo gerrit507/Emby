@@ -117,7 +117,7 @@ namespace MediaBrowser.Providers.Manager
 
                 if (providers.Count > 0 || isFirstRefresh || requiresRefresh)
                 {
-                    if (item.BeforeMetadataRefresh(refreshOptions.ReplaceAllMetadata))
+                    if (item.BeforeMetadataRefresh())
                     {
                         updateType = updateType | ItemUpdateType.MetadataImport;
                     }
@@ -193,7 +193,7 @@ namespace MediaBrowser.Providers.Manager
                 }
 
                 // Save to database
-                SaveItem(metadataResult, libraryOptions, updateType, cancellationToken);
+                await SaveItem(metadataResult, libraryOptions, updateType, cancellationToken).ConfigureAwait(false);
             }
 
             await AfterMetadataRefresh(itemOfType, refreshOptions, cancellationToken).ConfigureAwait(false);
@@ -208,19 +208,19 @@ namespace MediaBrowser.Providers.Manager
             lookupInfo.Year = result.ProductionYear;
         }
 
-        protected void SaveItem(MetadataResult<TItemType> result, LibraryOptions libraryOptions, ItemUpdateType reason, CancellationToken cancellationToken)
+        protected async Task SaveItem(MetadataResult<TItemType> result, LibraryOptions libraryOptions, ItemUpdateType reason, CancellationToken cancellationToken)
         {
             if (result.Item.SupportsPeople && result.People != null)
             {
                 var baseItem = result.Item;
 
                 LibraryManager.UpdatePeople(baseItem, result.People);
-                SavePeopleMetadata(result.People, libraryOptions, cancellationToken);
+                await SavePeopleMetadata(result.People, libraryOptions, cancellationToken).ConfigureAwait(false);
             }
             result.Item.UpdateToRepository(reason, cancellationToken);
         }
 
-        private void SavePeopleMetadata(List<PersonInfo> people, LibraryOptions libraryOptions, CancellationToken cancellationToken)
+        private async Task SavePeopleMetadata(List<PersonInfo> people, LibraryOptions libraryOptions, CancellationToken cancellationToken)
         {
             foreach (var person in people)
             {
@@ -243,7 +243,7 @@ namespace MediaBrowser.Providers.Manager
 
                     if (!string.IsNullOrWhiteSpace(person.ImageUrl) && !personEntity.HasImage(ImageType.Primary))
                     {
-                        AddPersonImage(personEntity, libraryOptions, person.ImageUrl, cancellationToken);
+                        await AddPersonImage(personEntity, libraryOptions, person.ImageUrl, cancellationToken).ConfigureAwait(false);
 
                         saveEntity = true;
                         updateType = updateType | ItemUpdateType.ImageUpdate;
@@ -257,7 +257,7 @@ namespace MediaBrowser.Providers.Manager
             }
         }
 
-        private void AddPersonImage(Person personEntity, LibraryOptions libraryOptions, string imageUrl, CancellationToken cancellationToken)
+        private async Task AddPersonImage(Person personEntity, LibraryOptions libraryOptions, string imageUrl, CancellationToken cancellationToken)
         {
             //if (libraryOptions.DownloadImagesInAdvance)
             //{
@@ -279,10 +279,11 @@ namespace MediaBrowser.Providers.Manager
             }, 0);
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         protected virtual Task AfterMetadataRefresh(TItemType item, MetadataRefreshOptions refreshOptions, CancellationToken cancellationToken)
         {
             item.AfterMetadataRefresh();
-            return Task.CompletedTask;
+            return _cachedTask;
         }
 
         /// <summary>
@@ -305,12 +306,9 @@ namespace MediaBrowser.Providers.Manager
         {
             if (EnableUpdateMetadataFromChildren(item, isFullRefresh, updateType))
             {
-                if (isFullRefresh || updateType > ItemUpdateType.None)
-                {
-                    var children = GetChildrenForMetadataUpdates(item);
+                var children = GetChildrenForMetadataUpdates(item);
 
-                    updateType = UpdateMetadataFromChildren(item, children, isFullRefresh, updateType);
-                }
+                updateType = UpdateMetadataFromChildren(item, children, isFullRefresh, updateType);
             }
 
             var presentationUniqueKey = item.CreatePresentationUniqueKey();
@@ -516,13 +514,13 @@ namespace MediaBrowser.Providers.Manager
 
             if (!item.LockedFields.Contains(MetadataFields.Genres))
             {
-                var currentList = item.Genres;
+                var currentList = item.Genres.ToList();
 
                 item.Genres = children.SelectMany(i => i.Genres)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
+                    .ToList();
 
-                if (currentList.Length != item.Genres.Length || !currentList.OrderBy(i => i).SequenceEqual(item.Genres.OrderBy(i => i), StringComparer.OrdinalIgnoreCase))
+                if (currentList.Count != item.Genres.Count || !currentList.OrderBy(i => i).SequenceEqual(item.Genres.OrderBy(i => i), StringComparer.OrdinalIgnoreCase))
                 {
                     updateType = updateType | ItemUpdateType.MetadataEdit;
                 }
@@ -608,18 +606,12 @@ namespace MediaBrowser.Providers.Manager
                     var anyRemoteProvidersChanged = providersWithChanges.OfType<IRemoteMetadataProvider>()
                         .Any();
 
-                    var anyLocalProvidersChanged = providersWithChanges.OfType<ILocalMetadataProvider>()
-                        .Any();
-
-                    var anyLocalPreRefreshProvidersChanged = providersWithChanges.OfType<IPreRefreshProvider>()
-                        .Any();
-
                     providers = providers.Where(i =>
                     {
                         // If any provider reports a change, always run local ones as well
                         if (i is ILocalMetadataProvider)
                         {
-                            return anyRemoteProvidersChanged || anyLocalProvidersChanged || anyLocalPreRefreshProvidersChanged;
+                            return true;
                         }
 
                         // If any remote providers changed, run them all so that priorities can be honored
@@ -633,7 +625,7 @@ namespace MediaBrowser.Providers.Manager
                             return anyRemoteProvidersChanged;
                         }
 
-                        // Run custom refresh providers if they report a change or any remote providers change
+                        // Run custom providers if they report a change or any remote providers change
                         return anyRemoteProvidersChanged || providersWithChanges.Contains(i);
 
                     }).ToList();
@@ -691,7 +683,8 @@ namespace MediaBrowser.Providers.Manager
         {
             var refreshResult = new RefreshResult
             {
-                UpdateType = ItemUpdateType.None
+                UpdateType = ItemUpdateType.None,
+                Providers = providers.Select(i => i.GetType().FullName.GetMD5()).ToList()
             };
 
             var item = metadata.Item;
@@ -969,6 +962,7 @@ namespace MediaBrowser.Providers.Manager
     {
         public ItemUpdateType UpdateType { get; set; }
         public string ErrorMessage { get; set; }
+        public List<Guid> Providers { get; set; }
         public int Failures { get; set; }
     }
 }

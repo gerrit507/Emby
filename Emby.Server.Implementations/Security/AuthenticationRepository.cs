@@ -81,7 +81,7 @@ namespace Emby.Server.Implementations.Security
                             statement.TryBind("@AppName", info.AppName);
                             statement.TryBind("@AppVersion", info.AppVersion);
                             statement.TryBind("@DeviceName", info.DeviceName);
-                            statement.TryBind("@UserId", (info.UserId.Equals(Guid.Empty) ? null : info.UserId.ToString("N")));
+                            statement.TryBind("@UserId", info.UserId);
                             statement.TryBind("@IsActive", info.IsActive);
                             statement.TryBind("@DateCreated", info.DateCreated.ToDateTimeParamValue());
 
@@ -111,9 +111,9 @@ namespace Emby.Server.Implementations.Security
                 statement.TryBind("@AccessToken", query.AccessToken);
             }
 
-            if (!query.UserId.Equals(Guid.Empty))
+            if (!string.IsNullOrEmpty(query.UserId))
             {
-                statement.TryBind("@UserId", query.UserId.ToString("N"));
+                statement.TryBind("@UserId", query.UserId);
             }
 
             if (!string.IsNullOrEmpty(query.DeviceId))
@@ -145,7 +145,7 @@ namespace Emby.Server.Implementations.Security
                 whereClauses.Add("AccessToken=@AccessToken");
             }
 
-            if (!query.UserId.Equals(Guid.Empty))
+            if (!string.IsNullOrEmpty(query.UserId))
             {
                 whereClauses.Add("UserId=@UserId");
             }
@@ -301,7 +301,7 @@ namespace Emby.Server.Implementations.Security
 
             if (reader[6].SQLiteType != SQLiteType.Null)
             {
-                info.UserId = new Guid(reader[6].ToString());
+                info.UserId = reader[6].ToString();
             }
 
             info.IsActive = reader[7].ToBool();

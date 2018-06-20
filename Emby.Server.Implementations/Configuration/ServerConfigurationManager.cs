@@ -102,6 +102,8 @@ namespace Emby.Server.Implementations.Configuration
             }
 
             ((ServerApplicationPaths)ApplicationPaths).InternalMetadataPath = metadataPath;
+
+            ((ServerApplicationPaths)ApplicationPaths).ItemsByNamePath = ((ServerApplicationPaths)ApplicationPaths).InternalMetadataPath;
         }
 
         private string GetInternalMetadataPath()

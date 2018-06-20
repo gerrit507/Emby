@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Services;
-using Emby.Server.Implementations.Net;
 
 namespace Emby.Server.Implementations.HttpServer
 {
@@ -14,7 +13,7 @@ namespace Emby.Server.Implementations.HttpServer
         /// Gets or sets the error handler.
         /// </summary>
         /// <value>The error handler.</value>
-        Func<Exception, IRequest, bool, bool, Task> ErrorHandler { get; set; }
+        Action<Exception, IRequest, bool> ErrorHandler { get; set; }
 
         /// <summary>
         /// Gets or sets the request handler.

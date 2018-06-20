@@ -189,7 +189,7 @@ namespace MediaBrowser.Providers.BoxSets
             {
                 using (var json = response.Content)
                 {
-                    mainResult = await _json.DeserializeFromStreamAsync<RootObject>(json).ConfigureAwait(false);
+                    mainResult = _json.DeserializeFromStream<RootObject>(json);
                 }
             }
 
@@ -217,7 +217,7 @@ namespace MediaBrowser.Providers.BoxSets
                     {
                         using (var json = response.Content)
                         {
-                            mainResult = await _json.DeserializeFromStreamAsync<RootObject>(json).ConfigureAwait(false);
+                            mainResult = _json.DeserializeFromStream<RootObject>(json);
                         }
                     }
                 }
@@ -225,6 +225,7 @@ namespace MediaBrowser.Providers.BoxSets
             return mainResult;
         }
 
+        private readonly Task _cachedTask = Task.FromResult(true);
         internal Task EnsureInfo(string tmdbId, string preferredMetadataLanguage, CancellationToken cancellationToken)
         {
             var path = GetDataFilePath(_config.ApplicationPaths, tmdbId, preferredMetadataLanguage);
@@ -236,7 +237,7 @@ namespace MediaBrowser.Providers.BoxSets
                 // If it's recent or automatic updates are enabled, don't re-download
                 if ((DateTime.UtcNow - _fileSystem.GetLastWriteTimeUtc(fileInfo)).TotalDays <= 3)
                 {
-                    return Task.CompletedTask;
+                    return _cachedTask;
                 }
             }
 

@@ -46,9 +46,8 @@ namespace MediaBrowser.Providers.MediaInfo
         private readonly ISubtitleManager _subtitleManager;
         private readonly IChapterManager _chapterManager;
         private readonly ILibraryManager _libraryManager;
-        private readonly IMediaSourceManager _mediaSourceManager;
 
-        public FFProbeVideoInfo(ILogger logger, IMediaSourceManager mediaSourceManager, IIsoManager isoManager, IMediaEncoder mediaEncoder, IItemRepository itemRepo, IBlurayExaminer blurayExaminer, ILocalizationManager localization, IApplicationPaths appPaths, IJsonSerializer json, IEncodingManager encodingManager, IFileSystem fileSystem, IServerConfigurationManager config, ISubtitleManager subtitleManager, IChapterManager chapterManager, ILibraryManager libraryManager)
+        public FFProbeVideoInfo(ILogger logger, IIsoManager isoManager, IMediaEncoder mediaEncoder, IItemRepository itemRepo, IBlurayExaminer blurayExaminer, ILocalizationManager localization, IApplicationPaths appPaths, IJsonSerializer json, IEncodingManager encodingManager, IFileSystem fileSystem, IServerConfigurationManager config, ISubtitleManager subtitleManager, IChapterManager chapterManager, ILibraryManager libraryManager)
         {
             _logger = logger;
             _isoManager = isoManager;
@@ -64,7 +63,6 @@ namespace MediaBrowser.Providers.MediaInfo
             _subtitleManager = subtitleManager;
             _chapterManager = chapterManager;
             _libraryManager = libraryManager;
-            _mediaSourceManager = mediaSourceManager;
         }
 
         public async Task<ItemUpdateType> ProbeVideo<T>(T item,
@@ -108,7 +106,7 @@ namespace MediaBrowser.Providers.MediaInfo
 
                 if (streamFileNames == null)
                 {
-                    streamFileNames = Array.Empty<string>();
+                    streamFileNames = new string[] { };
                 }
 
                 mediaInfoResult = await GetMediaInfo(item, streamFileNames, cancellationToken).ConfigureAwait(false);
@@ -133,7 +131,7 @@ namespace MediaBrowser.Providers.MediaInfo
             if (item.IsShortcut)
             {
                 path = item.ShortcutPath;
-                protocol = _mediaSourceManager.GetPathProtocol(path);
+                protocol = BaseItem.GetPathProtocol(path);
             }
 
             return _mediaEncoder.GetMediaInfo(new MediaInfoRequest
@@ -212,10 +210,9 @@ namespace MediaBrowser.Providers.MediaInfo
                 video.Video3DFormat = video.Video3DFormat ?? mediaInfo.Video3DFormat;
             }
 
-            var videoStream = mediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Video);
+            video.IsHD = mediaStreams.Any(i => i.Type == MediaStreamType.Video && i.Width.HasValue && i.Width.Value >= 1260);
 
-            video.Height = videoStream == null ? 0 : videoStream.Height ?? 0;
-            video.Width = videoStream == null ? 0 : videoStream.Width ?? 0;
+            var videoStream = mediaStreams.FirstOrDefault(i => i.Type == MediaStreamType.Video);
 
             video.DefaultVideoStreamIndex = videoStream == null ? (int?)null : videoStream.Index;
 
@@ -361,9 +358,9 @@ namespace MediaBrowser.Providers.MediaInfo
 
             if (!video.IsLocked && !video.LockedFields.Contains(MetadataFields.Genres))
             {
-                if (video.Genres.Length == 0 || isFullRefresh)
+                if (video.Genres.Count == 0 || isFullRefresh)
                 {
-                    video.Genres = Array.Empty<string>();
+                    video.Genres.Clear();
 
                     foreach (var genre in data.Genres)
                     {
@@ -414,7 +411,7 @@ namespace MediaBrowser.Providers.MediaInfo
                 if (!string.IsNullOrWhiteSpace(data.Name) && libraryOptions.EnableEmbeddedTitles)
                 {
                     // Don't use the embedded name for extras because it will often be the same name as the movie
-                    if (!video.ExtraType.HasValue)
+                    if (!video.ExtraType.HasValue && !video.IsOwnedItem)
                     {
                         video.Name = data.Name;
                     }
@@ -527,8 +524,6 @@ namespace MediaBrowser.Providers.MediaInfo
                     SkipIfAudioTrackMatches,
                     RequirePerfectMatch,
                     subtitleDownloadLanguages,
-                    libraryOptions.DisabledSubtitleFetchers,
-                    libraryOptions.SubtitleFetcherOrder,
                     cancellationToken).ConfigureAwait(false);
 
                 // Rescan

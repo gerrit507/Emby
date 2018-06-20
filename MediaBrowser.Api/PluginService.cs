@@ -6,6 +6,7 @@ using MediaBrowser.Controller.Devices;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Plugins;
+using MediaBrowser.Model.Registration;
 using MediaBrowser.Model.Serialization;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.Services;
-using MediaBrowser.Common.Plugins;
 
 namespace MediaBrowser.Api
 {
@@ -111,14 +111,6 @@ namespace MediaBrowser.Api
     {
         [ApiMember(Name = "Name", Description = "Feature Name", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string Name { get; set; }
-    }
-
-    public class RegistrationInfo
-    {
-        public string Name { get; set; }
-        public DateTime ExpirationDate { get; set; }
-        public bool IsTrial { get; set; }
-        public bool IsRegistered { get; set; }
     }
 
     [Route("/Appstore/Register", "POST", Summary = "Registers an appstore sale", IsHidden = true)]
@@ -240,7 +232,7 @@ namespace MediaBrowser.Api
                 }
             }
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -251,7 +243,7 @@ namespace MediaBrowser.Api
         public object Get(GetPluginConfiguration request)
         {
             var guid = new Guid(request.Id);
-            var plugin = _appHost.Plugins.First(p => p.Id == guid) as IHasPluginConfiguration;
+            var plugin = _appHost.Plugins.First(p => p.Id == guid);
 
             return ToOptimizedResult(plugin.Configuration);
         }
@@ -269,7 +261,7 @@ namespace MediaBrowser.Api
                 SupporterKey = _securityManager.SupporterKey
             };
 
-            return ToOptimizedResult(result);
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -295,20 +287,15 @@ namespace MediaBrowser.Api
         /// Posts the specified request.
         /// </summary>
         /// <param name="request">The request.</param>
-        public async Task Post(UpdatePluginConfiguration request)
+        public void Post(UpdatePluginConfiguration request)
         {
             // We need to parse this manually because we told service stack not to with IRequiresRequestStream
             // https://code.google.com/p/servicestack/source/browse/trunk/Common/ServiceStack.Text/ServiceStack.Text/Controller/PathInfo.cs
             var id = new Guid(GetPathValue(1));
 
-            var plugin = _appHost.Plugins.First(p => p.Id == id) as IHasPluginConfiguration;
+            var plugin = _appHost.Plugins.First(p => p.Id == id);
 
-            if (plugin == null)
-            {
-                throw new FileNotFoundException();
-            }
-
-            var configuration = (await _jsonSerializer.DeserializeFromStreamAsync(request.RequestStream, plugin.ConfigurationType).ConfigureAwait(false)) as BasePluginConfiguration;
+            var configuration = _jsonSerializer.DeserializeFromStream(request.RequestStream, plugin.ConfigurationType) as BasePluginConfiguration;
 
             plugin.UpdateConfiguration(configuration);
         }

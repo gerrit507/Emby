@@ -8,7 +8,7 @@ namespace Emby.Server.Implementations.Notifications
     {
         public IEnumerable<ConfigurationStore> GetConfigurations()
         {
-            return new ConfigurationStore[]
+            return new List<ConfigurationStore>
             {
                 new ConfigurationStore
                 {

@@ -75,7 +75,7 @@ namespace Emby.Server.Implementations.Images
             return updateType;
         }
 
-        protected Task<ItemUpdateType> FetchAsync(BaseItem item, ImageType imageType, MetadataRefreshOptions options, CancellationToken cancellationToken)
+        protected async Task<ItemUpdateType> FetchAsync(BaseItem item, ImageType imageType, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
             var image = item.GetImageInfo(imageType, 0);
 
@@ -83,18 +83,18 @@ namespace Emby.Server.Implementations.Images
             {
                 if (!image.IsLocalFile)
                 {
-                    return Task.FromResult(ItemUpdateType.None);
+                    return ItemUpdateType.None;
                 }
 
                 if (!FileSystem.ContainsSubPath(item.GetInternalMetadataPath(), image.Path))
                 {
-                    return Task.FromResult(ItemUpdateType.None);
+                    return ItemUpdateType.None;
                 }
             }
 
             var items = GetItemsWithImages(item);
 
-            return FetchToFileInternal(item, items, imageType, cancellationToken);
+            return await FetchToFileInternal(item, items, imageType, cancellationToken).ConfigureAwait(false);
         }
 
         protected async Task<ItemUpdateType> FetchToFileInternal(BaseItem item,
