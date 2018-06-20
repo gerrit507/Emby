@@ -18,7 +18,6 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Querying;
-using MediaBrowser.Model.Sync;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,6 +26,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Extensions;
+using MediaBrowser.Controller.Playlists;
 
 namespace Emby.Server.Implementations.Dto
 {
@@ -108,8 +108,6 @@ namespace Emby.Server.Implementations.Dto
                 throw new ArgumentNullException("options");
             }
 
-            var syncDictionary = GetSyncedItemProgress(options);
-
             var returnItems = new BaseItemDto[itemCount];
             var programTuples = new List<Tuple<BaseItem, BaseItemDto>>();
             var channelTuples = new List<Tuple<BaseItemDto, LiveTvChannel>>();
@@ -150,8 +148,6 @@ namespace Emby.Server.Implementations.Dto
                     }
                 }
 
-                FillSyncInfo(dto, item, options, user, syncDictionary);
-
                 returnItems[index] = dto;
                 index++;
             }
@@ -172,8 +168,6 @@ namespace Emby.Server.Implementations.Dto
 
         public BaseItemDto GetBaseItemDto(BaseItem item, DtoOptions options, User user = null, BaseItem owner = null)
         {
-            var syncDictionary = GetSyncedItemProgress(options);
-
             var allCollectionFolders = _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
             var dto = GetBaseItemDtoInternal(item, options, allCollectionFolders, user, owner);
             var tvChannel = item as LiveTvChannel;
@@ -202,11 +196,8 @@ namespace Emby.Server.Implementations.Dto
                     }), user);
                 }
 
-                FillSyncInfo(dto, item, options, user, syncDictionary);
                 return dto;
             }
-
-            FillSyncInfo(dto, item, options, user, syncDictionary);
 
             return dto;
         }
@@ -219,88 +210,6 @@ namespace Emby.Server.Implementations.Dto
                 DtoOptions = options
 
             });
-        }
-
-        public Dictionary<string, SyncedItemProgress> GetSyncedItemProgress(DtoOptions options)
-        {
-            if (!options.Fields.Contains(ItemFields.BasicSyncInfo) &&
-                !options.Fields.Contains(ItemFields.SyncInfo))
-            {
-                return new Dictionary<string, SyncedItemProgress>();
-            }
-
-            var deviceId = options.DeviceId;
-            if (string.IsNullOrEmpty(deviceId))
-            {
-                return new Dictionary<string, SyncedItemProgress>();
-            }
-
-            var caps = _deviceManager().GetCapabilities(deviceId);
-            if (caps == null || !caps.SupportsSync)
-            {
-                return new Dictionary<string, SyncedItemProgress>();
-            }
-
-            return _syncManager.GetSyncedItemProgresses(new SyncJobItemQuery
-            {
-                TargetId = deviceId,
-                Statuses = new[]
-                {
-                    SyncJobItemStatus.Converting,
-                    SyncJobItemStatus.Queued,
-                    SyncJobItemStatus.Transferring,
-                    SyncJobItemStatus.ReadyToTransfer,
-                    SyncJobItemStatus.Synced
-                }
-            });
-        }
-
-        public void FillSyncInfo(IEnumerable<Tuple<BaseItem, BaseItemDto>> tuples, DtoOptions options, User user)
-        {
-            if (options.Fields.Contains(ItemFields.BasicSyncInfo) ||
-                options.Fields.Contains(ItemFields.SyncInfo))
-            {
-                var syncProgress = GetSyncedItemProgress(options);
-
-                foreach (var tuple in tuples)
-                {
-                    var item = tuple.Item1;
-
-                    FillSyncInfo(tuple.Item2, item, options, user, syncProgress);
-                }
-            }
-        }
-
-        private void FillSyncInfo(IHasSyncInfo dto, BaseItem item, DtoOptions options, User user, Dictionary<string, SyncedItemProgress> syncProgress)
-        {
-            var hasFullSyncInfo = options.Fields.Contains(ItemFields.SyncInfo);
-
-            if (!hasFullSyncInfo && !options.Fields.Contains(ItemFields.BasicSyncInfo))
-            {
-                return;
-            }
-
-            if (dto.SupportsSync ?? false)
-            {
-                SyncedItemProgress syncStatus;
-                if (syncProgress.TryGetValue(dto.Id, out syncStatus))
-                {
-                    if (syncStatus.Status == SyncJobItemStatus.Synced)
-                    {
-                        dto.SyncPercent = 100;
-                    }
-                    else
-                    {
-                        dto.SyncPercent = syncStatus.Progress;
-                    }
-
-                    if (hasFullSyncInfo)
-                    {
-                        dto.HasSyncJob = true;
-                        dto.SyncStatus = syncStatus.Status;
-                    }
-                }
-            }
         }
 
         private BaseItemDto GetBaseItemDtoInternal(BaseItem item, DtoOptions options, List<Folder> allCollectionFolders, User user = null, BaseItem owner = null)
@@ -360,7 +269,7 @@ namespace Emby.Server.Implementations.Dto
             {
                 if (fields.Contains(ItemFields.MediaSources))
                 {
-                    dto.MediaSources = _mediaSourceManager().GetStaticMediaSources(item, true, user);
+                    dto.MediaSources = _mediaSourceManager().GetStaticMediaSources(item, true, user).ToArray();
 
                     NormalizeMediaSourceContainers(dto);
                 }
@@ -450,7 +359,7 @@ namespace Emby.Server.Implementations.Dto
             }
         }
 
-        public BaseItemDto GetItemByNameDto(BaseItem item, DtoOptions options, List<BaseItem> taggedItems, Dictionary<string, SyncedItemProgress> syncProgress, User user = null)
+        public BaseItemDto GetItemByNameDto(BaseItem item, DtoOptions options, List<BaseItem> taggedItems, User user = null)
         {
             var allCollectionFolders = _libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
             var dto = GetBaseItemDtoInternal(item, options, allCollectionFolders, user);
@@ -459,8 +368,6 @@ namespace Emby.Server.Implementations.Dto
             {
                 SetItemByNameInfo(item, dto, taggedItems, user);
             }
-
-            FillSyncInfo(dto, item, options, user, syncProgress);
 
             return dto;
         }
@@ -522,7 +429,7 @@ namespace Emby.Server.Implementations.Dto
                 if (!dto.ChildCount.HasValue && item.SourceType == SourceType.Library)
                 {
                     // For these types we can try to optimize and assume these values will be equal
-                    if (item is MusicAlbum || item is Season)
+                    if (item is MusicAlbum || item is Season || item is Playlist)
                     {
                         dto.ChildCount = dto.RecursiveItemCount;
                     }
@@ -595,39 +502,12 @@ namespace Emby.Server.Implementations.Dto
             return item.Id.ToString("N");
         }
 
-        /// <summary>
-        /// Converts a UserItemData to a DTOUserItemData
-        /// </summary>
-        /// <param name="data">The data.</param>
-        /// <returns>DtoUserItemData.</returns>
-        /// <exception cref="System.ArgumentNullException"></exception>
-        public UserItemDataDto GetUserItemDataDto(UserItemData data)
-        {
-            if (data == null)
-            {
-                throw new ArgumentNullException("data");
-            }
-
-            return new UserItemDataDto
-            {
-                IsFavorite = data.IsFavorite,
-                Likes = data.Likes,
-                PlaybackPositionTicks = data.PlaybackPositionTicks,
-                PlayCount = data.PlayCount,
-                Rating = data.Rating,
-                Played = data.Played,
-                LastPlayedDate = data.LastPlayedDate,
-                Key = data.Key
-            };
-        }
         private void SetBookProperties(BaseItemDto dto, Book item)
         {
             dto.SeriesName = item.SeriesName;
         }
         private void SetPhotoProperties(BaseItemDto dto, Photo item)
         {
-            dto.Width = item.Width;
-            dto.Height = item.Height;
             dto.CameraMake = item.CameraMake;
             dto.CameraModel = item.CameraModel;
             dto.Software = item.Software;
@@ -647,7 +527,7 @@ namespace Emby.Server.Implementations.Dto
             if (album != null)
             {
                 dto.Album = album.Name;
-                dto.AlbumId = album.Id.ToString("N");
+                dto.AlbumId = album.Id;
             }
         }
 
@@ -665,7 +545,7 @@ namespace Emby.Server.Implementations.Dto
 
                 if (parentAlbumIds.Count > 0)
                 {
-                    dto.AlbumId = parentAlbumIds[0].ToString("N");
+                    dto.AlbumId = parentAlbumIds[0];
                 }
             }
 
@@ -813,10 +693,10 @@ namespace Emby.Server.Implementations.Dto
         {
             dto.Studios = item.Studios
                 .Where(i => !string.IsNullOrEmpty(i))
-                .Select(i => new NameIdPair
+                .Select(i => new NameGuidPair
                 {
                     Name = i,
-                    Id = _libraryManager.GetStudioId(i).ToString("N")
+                    Id = _libraryManager.GetStudioId(i)
                 })
                 .ToArray();
         }
@@ -825,7 +705,7 @@ namespace Emby.Server.Implementations.Dto
         {
             dto.GenreItems = item.Genres
                 .Where(i => !string.IsNullOrEmpty(i))
-                .Select(i => new NameIdPair
+                .Select(i => new NameGuidPair
                 {
                     Name = i,
                     Id = GetGenreId(i, item)
@@ -833,53 +713,19 @@ namespace Emby.Server.Implementations.Dto
                 .ToArray();
         }
 
-        private string GetGenreId(string name, BaseItem owner)
+        private Guid GetGenreId(string name, BaseItem owner)
         {
             if (owner is IHasMusicGenres)
             {
-                return _libraryManager.GetMusicGenreId(name).ToString("N");
+                return _libraryManager.GetMusicGenreId(name);
             }
 
             if (owner is Game || owner is GameSystem)
             {
-                return _libraryManager.GetGameGenreId(name).ToString("N");
+                return _libraryManager.GetGameGenreId(name);
             }
 
-            return _libraryManager.GetGenreId(name).ToString("N");
-        }
-
-        /// <summary>
-        /// Gets the chapter info dto.
-        /// </summary>
-        /// <param name="chapterInfo">The chapter info.</param>
-        /// <param name="item">The item.</param>
-        /// <returns>ChapterInfoDto.</returns>
-        private ChapterInfoDto GetChapterInfoDto(ChapterInfo chapterInfo, BaseItem item)
-        {
-            var dto = new ChapterInfoDto
-            {
-                Name = chapterInfo.Name,
-                StartPositionTicks = chapterInfo.StartPositionTicks
-            };
-
-            if (!string.IsNullOrEmpty(chapterInfo.ImagePath))
-            {
-                dto.ImageTag = GetImageCacheTag(item, new ItemImageInfo
-                {
-                    Path = chapterInfo.ImagePath,
-                    Type = ImageType.Chapter,
-                    DateModified = chapterInfo.ImageDateModified
-                });
-            }
-
-            return dto;
-        }
-
-        public List<ChapterInfoDto> GetChapterInfoDtos(BaseItem item)
-        {
-            return _itemRepo.GetChapters(item.Id)
-                .Select(c => GetChapterInfoDto(c, item))
-                .ToList();
+            return _libraryManager.GetGenreId(name);
         }
 
         /// <summary>
@@ -907,11 +753,6 @@ namespace Emby.Server.Implementations.Dto
             dto.Container = item.Container;
 
             dto.EndDate = item.EndDate;
-
-            if (fields.Contains(ItemFields.HomePageUrl))
-            {
-                dto.HomePageUrl = item.HomePageUrl;
-            }
 
             if (fields.Contains(ItemFields.ExternalUrls))
             {
@@ -971,7 +812,7 @@ namespace Emby.Server.Implementations.Dto
                 }
             }
 
-            dto.Id = GetDtoId(item);
+            dto.Id = item.Id;
             dto.IndexNumber = item.IndexNumber;
             dto.ParentIndexNumber = item.ParentIndexNumber;
 
@@ -991,10 +832,6 @@ namespace Emby.Server.Implementations.Dto
                 dto.LocationType = item.LocationType;
             }
 
-            if (item.IsHD.HasValue && item.IsHD.Value)
-            {
-                dto.IsHD = item.IsHD;
-            }
             dto.Audio = item.Audio;
 
             if (fields.Contains(ItemFields.Settings))
@@ -1045,11 +882,7 @@ namespace Emby.Server.Implementations.Dto
 
             if (fields.Contains(ItemFields.ParentId))
             {
-                var displayParentId = item.DisplayParentId;
-                if (displayParentId.HasValue)
-                {
-                    dto.ParentId = displayParentId.Value.ToString("N");
-                }
+                dto.ParentId = item.DisplayParentId;
             }
 
             AddInheritedImages(dto, item, options, owner);
@@ -1093,7 +926,7 @@ namespace Emby.Server.Implementations.Dto
 
                 if (dto.Taglines == null)
                 {
-                    dto.Taglines = new string[] { };
+                    dto.Taglines = Array.Empty<string>();
                 }
             }
 
@@ -1123,7 +956,7 @@ namespace Emby.Server.Implementations.Dto
 
                 if (albumParent != null)
                 {
-                    dto.AlbumId = GetDtoId(albumParent);
+                    dto.AlbumId = albumParent.Id;
 
                     dto.AlbumPrimaryImageTag = GetImageCacheTag(albumParent, ImageType.Primary);
                 }
@@ -1267,7 +1100,7 @@ namespace Emby.Server.Implementations.Dto
 
                 if (fields.Contains(ItemFields.Chapters))
                 {
-                    dto.Chapters = GetChapterInfoDtos(item);
+                    dto.Chapters = _itemRepo.GetChapters(item);
                 }
 
                 if (video.ExtraType.HasValue)
@@ -1285,7 +1118,7 @@ namespace Emby.Server.Implementations.Dto
                 {
                     MediaStream[] mediaStreams;
 
-                    if (dto.MediaSources != null && dto.MediaSources.Count > 0)
+                    if (dto.MediaSources != null && dto.MediaSources.Length > 0)
                     {
                         if (item.SourceType == SourceType.Channel)
                         {
@@ -1325,13 +1158,6 @@ namespace Emby.Server.Implementations.Dto
                 dto.IndexNumberEnd = episode.IndexNumberEnd;
                 dto.SeriesName = episode.SeriesName;
 
-                if (fields.Contains(ItemFields.AlternateEpisodeNumbers))
-                {
-                    dto.DvdSeasonNumber = episode.DvdSeasonNumber;
-                    dto.DvdEpisodeNumber = episode.DvdEpisodeNumber;
-                    dto.AbsoluteEpisodeNumber = episode.AbsoluteEpisodeNumber;
-                }
-
                 if (fields.Contains(ItemFields.SpecialEpisodeNumbers))
                 {
                     dto.AirsAfterSeasonNumber = episode.AirsAfterSeasonNumber;
@@ -1339,19 +1165,9 @@ namespace Emby.Server.Implementations.Dto
                     dto.AirsBeforeSeasonNumber = episode.AirsBeforeSeasonNumber;
                 }
 
-                var seasonId = episode.SeasonId;
-                if (seasonId.HasValue)
-                {
-                    dto.SeasonId = seasonId.Value.ToString("N");
-                }
-
                 dto.SeasonName = episode.SeasonName;
-
-                var seriesId = episode.SeriesId;
-                if (seriesId.HasValue)
-                {
-                    dto.SeriesId = seriesId.Value.ToString("N");
-                }
+                dto.SeasonId = episode.SeasonId;
+                dto.SeriesId = episode.SeriesId;
 
                 Series episodeSeries = null;
 
@@ -1388,12 +1204,7 @@ namespace Emby.Server.Implementations.Dto
             if (season != null)
             {
                 dto.SeriesName = season.SeriesName;
-
-                var seriesId = season.SeriesId;
-                if (seriesId.HasValue)
-                {
-                    dto.SeriesId = seriesId.Value.ToString("N");
-                }
+                dto.SeriesId = season.SeriesId;
 
                 series = null;
 
@@ -1450,6 +1261,33 @@ namespace Emby.Server.Implementations.Dto
                 }
             }
 
+            if (fields.Contains(ItemFields.Width))
+            {
+                var width = item.Width;
+                if (width > 0)
+                {
+                    dto.Width = width;
+                }
+            }
+
+            if (fields.Contains(ItemFields.Height))
+            {
+                var height = item.Height;
+                if (height > 0)
+                {
+                    dto.Height = height;
+                }
+            }
+
+            if (fields.Contains(ItemFields.IsHD))
+            {
+                // Compatibility
+                if (item.IsHD)
+                {
+                    dto.IsHD = true;
+                }
+            }
+
             var photo = item as Photo;
             if (photo != null)
             {
@@ -1458,7 +1296,7 @@ namespace Emby.Server.Implementations.Dto
 
             dto.ChannelId = item.ChannelId;
 
-            if (item.SourceType == SourceType.Channel && !string.IsNullOrEmpty(item.ChannelId))
+            if (item.SourceType == SourceType.Channel)
             {
                 var channel = _libraryManager.GetItemById(item.ChannelId);
                 if (channel != null)
@@ -1480,7 +1318,7 @@ namespace Emby.Server.Implementations.Dto
                 }
             }
 
-            var parent = currentItem.DisplayParent ?? (currentItem.IsOwnedItem ? currentItem.GetOwner() : currentItem.GetParent());
+            var parent = currentItem.DisplayParent ?? currentItem.GetOwner() ?? currentItem.GetParent();
 
             if (parent == null && !(originalItem is UserRootFolder) && !(originalItem is UserView) && !(originalItem is AggregateFolder) && !(originalItem is ICollectionFolder) && !(originalItem is Channel))
             {
@@ -1615,15 +1453,15 @@ namespace Emby.Server.Implementations.Dto
 
             var defaultAspectRatio = item.GetDefaultPrimaryImageAspectRatio();
 
-            if (defaultAspectRatio.HasValue)
+            if (defaultAspectRatio > 0)
             {
-                if (supportedEnhancers.Count == 0)
+                if (supportedEnhancers.Length == 0)
                 {
-                    return defaultAspectRatio.Value;
+                    return defaultAspectRatio;
                 }
 
                 double dummyWidth = 200;
-                double dummyHeight = dummyWidth / defaultAspectRatio.Value;
+                double dummyHeight = dummyWidth / defaultAspectRatio;
                 size = new ImageSize(dummyWidth, dummyHeight);
             }
             else

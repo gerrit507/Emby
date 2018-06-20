@@ -19,11 +19,6 @@ namespace Emby.Server.Implementations.Session
     public class SessionWebSocketListener : IWebSocketListener, IDisposable
     {
         /// <summary>
-        /// The _true task result
-        /// </summary>
-        private readonly Task _trueTaskResult = Task.FromResult(true);
-
-        /// <summary>
         /// The _session manager
         /// </summary>
         private readonly ISessionManager _sessionManager;
@@ -39,7 +34,6 @@ namespace Emby.Server.Implementations.Session
         private readonly IJsonSerializer _json;
 
         private readonly IHttpServer _httpServer;
-        private readonly IServerManager _serverManager;
 
 
         /// <summary>
@@ -50,14 +44,13 @@ namespace Emby.Server.Implementations.Session
         /// <param name="json">The json.</param>
         /// <param name="httpServer">The HTTP server.</param>
         /// <param name="serverManager">The server manager.</param>
-        public SessionWebSocketListener(ISessionManager sessionManager, ILogManager logManager, IJsonSerializer json, IHttpServer httpServer, IServerManager serverManager)
+        public SessionWebSocketListener(ISessionManager sessionManager, ILogManager logManager, IJsonSerializer json, IHttpServer httpServer)
         {
             _sessionManager = sessionManager;
             _logger = logManager.GetLogger(GetType().Name);
             _json = json;
             _httpServer = httpServer;
-            _serverManager = serverManager;
-            serverManager.WebSocketConnected += _serverManager_WebSocketConnected;
+            httpServer.WebSocketConnected += _serverManager_WebSocketConnected;
         }
 
         void _serverManager_WebSocketConnected(object sender, GenericEventArgs<IWebSocketConnection> e)
@@ -92,7 +85,7 @@ namespace Emby.Server.Implementations.Session
 
         public void Dispose()
         {
-            _serverManager.WebSocketConnected -= _serverManager_WebSocketConnected;
+            _httpServer.WebSocketConnected -= _serverManager_WebSocketConnected;
         }
 
         /// <summary>
@@ -107,7 +100,7 @@ namespace Emby.Server.Implementations.Session
                 ProcessIdentityMessage(message);
             }
 
-            return _trueTaskResult;
+            return Task.CompletedTask;
         }
 
         /// <summary>

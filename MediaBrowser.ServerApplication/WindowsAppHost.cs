@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices.ComTypes;
-using Emby.Server.CinemaMode;
 using Emby.Server.Connect;
 using Emby.Server.Implementations;
 using Emby.Server.Implementations.EntryPoints;
@@ -19,6 +18,7 @@ using MediaBrowser.Model.System;
 using MediaBrowser.Model.Updates;
 using MediaBrowser.Server.Startup.Common;
 using MediaBrowser.ServerApplication.Native;
+using Emby.Server.Implementations.HttpServer;
 
 namespace MediaBrowser.ServerApplication
 {
@@ -54,7 +54,6 @@ namespace MediaBrowser.ServerApplication
         {
             var list = new List<Assembly>();
 
-            list.Add(typeof(DefaultIntroProvider).Assembly);
             list.Add(typeof(ConnectManager).Assembly);
             list.Add(typeof(SyncManager).Assembly);
             list.Add(GetType().Assembly);
@@ -103,6 +102,20 @@ namespace MediaBrowser.ServerApplication
                 //Remove our shortcut from the startup folder for this user
                 FileSystemManager.DeleteFile(Path.Combine(startupPath, "Emby Server.lnk"));
             }
+        }
+
+        protected override IHttpListener CreateHttpListener()
+        {
+            return new EmbyServer.SocketSharp.WebSocketSharpListener(LogManager.GetLogger("HttpServer"),
+                Certificate,
+                StreamHelper,
+                TextEncoding,
+                NetworkManager,
+                SocketFactory,
+                CryptographyProvider,
+                SupportsDualModeSockets,
+                FileSystemManager,
+                EnvironmentInfo);
         }
 
         public override bool CanSelfRestart

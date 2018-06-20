@@ -410,7 +410,7 @@ namespace Emby.Server.Implementations.Notifications
                 }
             }
 
-            var hasSeries = item as IHasSeries;
+            var hasSeries = item as IHasSeriesName;
 
             if (hasSeries != null)
             {
@@ -452,7 +452,7 @@ namespace Emby.Server.Implementations.Notifications
         {
             var notification = new NotificationRequest
             {
-                UserIds = new List<string> { e.Argument.Id.ToString("N") },
+                UserIds = new[] { e.Argument.Id },
                 Name = "Welcome to Emby!",
                 Description = "Check back here for more notifications."
             };

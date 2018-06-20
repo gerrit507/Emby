@@ -56,7 +56,7 @@ namespace MediaBrowser.Api.UserLibrary
         {
             BaseItem parentItem;
 
-            if (!string.IsNullOrWhiteSpace(request.UserId))
+            if (!request.UserId.Equals(Guid.Empty))
             {
                 var user = UserManager.GetUserById(request.UserId);
                 parentItem = string.IsNullOrEmpty(request.ParentId) ? LibraryManager.GetUserRootFolder() : LibraryManager.GetItemById(request.ParentId);
@@ -73,16 +73,10 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var parent = GetParentItem(request);
 
-            var collectionFolder = parent as ICollectionFolder;
+            var collectionFolder = parent as IHasCollectionType;
             if (collectionFolder != null)
             {
                 return collectionFolder.CollectionType;
-            }
-
-            var view = parent as UserView;
-            if (view != null)
-            {
-                return view.ViewType;
             }
 
             return null;
@@ -95,7 +89,7 @@ namespace MediaBrowser.Api.UserLibrary
             User user = null;
             BaseItem parentItem;
 
-            if (!string.IsNullOrWhiteSpace(request.UserId))
+            if (!request.UserId.Equals(Guid.Empty))
             {
                 user = UserManager.GetUserById(request.UserId);
                 parentItem = string.IsNullOrEmpty(request.ParentId) ? LibraryManager.GetUserRootFolder() : LibraryManager.GetItemById(request.ParentId);
@@ -123,10 +117,10 @@ namespace MediaBrowser.Api.UserLibrary
                 Tags = request.GetTags(),
                 OfficialRatings = request.GetOfficialRatings(),
                 Genres = request.GetGenres(),
-                GenreIds = request.GetGenreIds(),
-                StudioIds = request.GetStudioIds(),
+                GenreIds = GetGuids(request.GenreIds),
+                StudioIds = GetGuids(request.StudioIds),
                 Person = request.Person,
-                PersonIds = request.GetPersonIds(),
+                PersonIds = GetGuids(request.PersonIds),
                 PersonTypes = request.GetPersonTypes(),
                 Years = request.GetYears(),
                 MinCommunityRating = request.MinCommunityRating,
@@ -197,10 +191,9 @@ namespace MediaBrowser.Api.UserLibrary
 
             var result = GetItems(request, query);
 
-            var syncProgess = DtoService.GetSyncedItemProgress(dtoOptions);
             var dtos = result.Items.Select(i =>
             {
-                var dto = DtoService.GetItemByNameDto(i.Item1, dtoOptions, null, syncProgess, user);
+                var dto = DtoService.GetItemByNameDto(i.Item1, dtoOptions, null, user);
 
                 if (!string.IsNullOrWhiteSpace(request.IncludeItemTypes))
                 {
@@ -247,7 +240,7 @@ namespace MediaBrowser.Api.UserLibrary
             User user = null;
             BaseItem parentItem;
 
-            if (!string.IsNullOrWhiteSpace(request.UserId))
+            if (!request.UserId.Equals(Guid.Empty))
             {
                 user = UserManager.GetUserById(request.UserId);
                 parentItem = string.IsNullOrEmpty(request.ParentId) ? LibraryManager.GetUserRootFolder() : LibraryManager.GetItemById(request.ParentId);
@@ -277,7 +270,7 @@ namespace MediaBrowser.Api.UserLibrary
             {
                 var folder = (Folder)parentItem;
 
-                if (!string.IsNullOrWhiteSpace(request.UserId))
+                if (!request.UserId.Equals(Guid.Empty))
                 {
                     items = request.Recursive ?
                         folder.GetRecursiveChildren(user, query).ToList() :
@@ -326,8 +319,7 @@ namespace MediaBrowser.Api.UserLibrary
 
             var tuples = ibnItems.Select(i => new Tuple<BaseItem, List<BaseItem>>(i, new List<BaseItem>()));
 
-            var syncProgess = DtoService.GetSyncedItemProgress(dtoOptions);
-            var dtos = tuples.Select(i => DtoService.GetItemByNameDto(i.Item1, dtoOptions, i.Item2, syncProgess, user));
+            var dtos = tuples.Select(i => DtoService.GetItemByNameDto(i.Item1, dtoOptions, i.Item2, user));
 
             result.Items = dtos.Where(i => i != null).ToArray();
 

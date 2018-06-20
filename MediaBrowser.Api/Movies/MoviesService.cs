@@ -49,7 +49,7 @@ namespace MediaBrowser.Api.Movies
         /// </summary>
         /// <value>The user id.</value>
         [ApiMember(Name = "UserId", Description = "Optional. Filter by user id, and attach user data", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
-        public string UserId { get; set; }
+        public Guid UserId { get; set; }
 
         /// <summary>
         /// Specify this to localize the search to a specific item or folder. Omit to use the root.
@@ -117,14 +117,14 @@ namespace MediaBrowser.Api.Movies
         {
             var result = GetSimilarItemsResult(request);
 
-            return ToOptimizedSerializedResultUsingCache(result);
+            return ToOptimizedResult(result);
         }
 
         public object Get(GetSimilarTrailers request)
         {
             var result = GetSimilarItemsResult(request);
 
-            return ToOptimizedSerializedResultUsingCache(result);
+            return ToOptimizedResult(result);
         }
 
         public object Get(GetMovieRecommendations request)
@@ -140,10 +140,10 @@ namespace MediaBrowser.Api.Movies
 
         private QueryResult<BaseItemDto> GetSimilarItemsResult(BaseGetSimilarItemsFromItem request)
         {
-            var user = !string.IsNullOrWhiteSpace(request.UserId) ? _userManager.GetUserById(request.UserId) : null;
+            var user = !request.UserId.Equals(Guid.Empty) ? _userManager.GetUserById(request.UserId) : null;
 
             var item = string.IsNullOrEmpty(request.Id) ?
-                (!string.IsNullOrWhiteSpace(request.UserId) ? _libraryManager.GetUserRootFolder() :
+                (!request.UserId.Equals(Guid.Empty) ? _libraryManager.GetUserRootFolder() :
                 _libraryManager.RootFolder) : _libraryManager.GetItemById(request.Id);
 
             var itemTypes = new List<string> { typeof(Movie).Name };
@@ -182,7 +182,7 @@ namespace MediaBrowser.Api.Movies
         {
             var categories = new List<RecommendationDto>();
 
-            var parentIdGuid = string.IsNullOrWhiteSpace(parentId) ? (Guid?)null : new Guid(parentId);
+            var parentIdGuid = string.IsNullOrWhiteSpace(parentId) ? Guid.Empty : new Guid(parentId);
 
             var query = new InternalItemsQuery(user)
             {
@@ -193,7 +193,7 @@ namespace MediaBrowser.Api.Movies
                     //typeof(LiveTvProgram).Name
                 },
                 // IsMovie = true
-                OrderBy = new[] { ItemSortBy.DatePlayed, ItemSortBy.Random }.Select(i => new Tuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
+                OrderBy = new[] { ItemSortBy.DatePlayed, ItemSortBy.Random }.Select(i => new ValueTuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
                 Limit = 7,
                 ParentId = parentIdGuid,
                 Recursive = true,
@@ -214,7 +214,7 @@ namespace MediaBrowser.Api.Movies
             {
                 IncludeItemTypes = itemTypes.ToArray(itemTypes.Count),
                 IsMovie = true,
-                OrderBy = new[] { ItemSortBy.Random }.Select(i => new Tuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
+                OrderBy = new[] { ItemSortBy.Random }.Select(i => new ValueTuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
                 Limit = 10,
                 IsFavoriteOrLiked = true,
                 ExcludeItemIds = recentlyPlayedMovies.Select(i => i.Id).ToArray(recentlyPlayedMovies.Count),
@@ -316,7 +316,7 @@ namespace MediaBrowser.Api.Movies
                     yield return new RecommendationDto
                     {
                         BaselineItemName = name,
-                        CategoryId = name.GetMD5().ToString("N"),
+                        CategoryId = name.GetMD5(),
                         RecommendationType = type,
                         Items = returnItems
                     };
@@ -356,7 +356,7 @@ namespace MediaBrowser.Api.Movies
                     yield return new RecommendationDto
                     {
                         BaselineItemName = name,
-                        CategoryId = name.GetMD5().ToString("N"),
+                        CategoryId = name.GetMD5(),
                         RecommendationType = type,
                         Items = returnItems
                     };
@@ -393,7 +393,7 @@ namespace MediaBrowser.Api.Movies
                     yield return new RecommendationDto
                     {
                         BaselineItemName = item.Name,
-                        CategoryId = item.Id.ToString("N"),
+                        CategoryId = item.Id,
                         RecommendationType = type,
                         Items = returnItems
                     };
@@ -405,7 +405,7 @@ namespace MediaBrowser.Api.Movies
         {
             var people = _libraryManager.GetPeople(new InternalPeopleQuery
             {
-                ExcludePersonTypes = new List<string>
+                ExcludePersonTypes = new []
                 {
                     PersonType.Director
                 },

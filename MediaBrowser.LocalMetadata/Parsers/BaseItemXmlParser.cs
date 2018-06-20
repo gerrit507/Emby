@@ -253,18 +253,6 @@ namespace MediaBrowser.LocalMetadata.Parsers
                         break;
                     }
 
-                case "Website":
-                    {
-                        var val = reader.ReadElementContentAsString();
-
-                        if (!string.IsNullOrWhiteSpace(val))
-                        {
-                            item.HomePageUrl = val;
-                        }
-
-                        break;
-                    }
-
                 case "LockedFields":
                     {
                         var val = reader.ReadElementContentAsString();
@@ -726,9 +714,10 @@ namespace MediaBrowser.LocalMetadata.Parsers
                     }
             }
         }
-
         private void FetchFromSharesNode(XmlReader reader, IHasShares item)
         {
+            var list = new List<Share>();
+
             reader.MoveToContent();
             reader.Read();
 
@@ -746,20 +735,24 @@ namespace MediaBrowser.LocalMetadata.Parsers
                                     reader.Read();
                                     continue;
                                 }
-                                using (var subtree = reader.ReadSubtree())
+
+                                using (var subReader = reader.ReadSubtree())
                                 {
-                                    var share = GetShareFromNode(subtree);
-                                    if (share != null)
+                                    var child = GetShare(subReader);
+
+                                    if (child != null)
                                     {
-                                        item.Shares.Add(share);
+                                        list.Add(child);
                                     }
                                 }
+
                                 break;
                             }
-
                         default:
-                            reader.Skip();
-                            break;
+                            {
+                                reader.Skip();
+                                break;
+                            }
                     }
                 }
                 else
@@ -767,6 +760,8 @@ namespace MediaBrowser.LocalMetadata.Parsers
                     reader.Read();
                 }
             }
+
+            item.Shares = list.ToArray();
         }
 
         private Share GetShareFromNode(XmlReader reader)
@@ -1282,7 +1277,7 @@ namespace MediaBrowser.LocalMetadata.Parsers
 
             value = value.Trim().Trim(separator);
 
-            return string.IsNullOrWhiteSpace(value) ? new string[] { } : Split(value, separator, StringSplitOptions.RemoveEmptyEntries);
+            return string.IsNullOrWhiteSpace(value) ? Array.Empty<string>() : Split(value, separator, StringSplitOptions.RemoveEmptyEntries);
         }
 
         /// <summary>

@@ -52,6 +52,7 @@ namespace MediaBrowser.Providers.MediaInfo
         private readonly IChapterManager _chapterManager;
         private readonly ILibraryManager _libraryManager;
         private readonly IChannelManager _channelManager;
+        private readonly IMediaSourceManager _mediaSourceManager;
 
         public string Name
         {
@@ -119,16 +120,16 @@ namespace MediaBrowser.Providers.MediaInfo
 
         public Task<ItemUpdateType> FetchAsync(Audio item, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
-            return FetchAudioInfo(item, cancellationToken);
+            return FetchAudioInfo(item, options, cancellationToken);
         }
 
         public Task<ItemUpdateType> FetchAsync(AudioBook item, MetadataRefreshOptions options, CancellationToken cancellationToken)
         {
-            return FetchAudioInfo(item, cancellationToken);
+            return FetchAudioInfo(item, options, cancellationToken);
         }
 
         private SubtitleResolver _subtitleResolver;
-        public FFProbeProvider(ILogger logger, IChannelManager channelManager, IIsoManager isoManager, IMediaEncoder mediaEncoder, IItemRepository itemRepo, IBlurayExaminer blurayExaminer, ILocalizationManager localization, IApplicationPaths appPaths, IJsonSerializer json, IEncodingManager encodingManager, IFileSystem fileSystem, IServerConfigurationManager config, ISubtitleManager subtitleManager, IChapterManager chapterManager, ILibraryManager libraryManager)
+        public FFProbeProvider(ILogger logger, IMediaSourceManager mediaSourceManager, IChannelManager channelManager, IIsoManager isoManager, IMediaEncoder mediaEncoder, IItemRepository itemRepo, IBlurayExaminer blurayExaminer, ILocalizationManager localization, IApplicationPaths appPaths, IJsonSerializer json, IEncodingManager encodingManager, IFileSystem fileSystem, IServerConfigurationManager config, ISubtitleManager subtitleManager, IChapterManager chapterManager, ILibraryManager libraryManager)
         {
             _logger = logger;
             _isoManager = isoManager;
@@ -145,6 +146,7 @@ namespace MediaBrowser.Providers.MediaInfo
             _chapterManager = chapterManager;
             _libraryManager = libraryManager;
             _channelManager = channelManager;
+            _mediaSourceManager = mediaSourceManager;
 
             _subtitleResolver = new SubtitleResolver(BaseItem.LocalizationManager, fileSystem);
         }
@@ -173,8 +175,7 @@ namespace MediaBrowser.Providers.MediaInfo
                 return _cachedTask;
             }
 
-            // hack alert
-            if (item.SourceType == SourceType.Channel && !_channelManager.EnableMediaProbe(item))
+            if (!options.EnableRemoteContentProbe && !item.IsFileProtocol)
             {
                 return _cachedTask;
             }
@@ -184,7 +185,7 @@ namespace MediaBrowser.Providers.MediaInfo
                 FetchShortcutInfo(item);
             }
 
-            var prober = new FFProbeVideoInfo(_logger, _isoManager, _mediaEncoder, _itemRepo, _blurayExaminer, _localization, _appPaths, _json, _encodingManager, _fileSystem, _config, _subtitleManager, _chapterManager, _libraryManager);
+            var prober = new FFProbeVideoInfo(_logger, _mediaSourceManager, _isoManager, _mediaEncoder, _itemRepo, _blurayExaminer, _localization, _appPaths, _json, _encodingManager, _fileSystem, _config, _subtitleManager, _chapterManager, _libraryManager);
 
             return prober.ProbeVideo(item, options, cancellationToken);
         }
@@ -204,9 +205,19 @@ namespace MediaBrowser.Providers.MediaInfo
                 .FirstOrDefault(i => !string.IsNullOrWhiteSpace(i) && !i.StartsWith("#", StringComparison.OrdinalIgnoreCase));
         }
 
-        public Task<ItemUpdateType> FetchAudioInfo<T>(T item, CancellationToken cancellationToken)
+        public Task<ItemUpdateType> FetchAudioInfo<T>(T item, MetadataRefreshOptions options, CancellationToken cancellationToken)
             where T : Audio
         {
+            if (item.IsVirtualItem)
+            {
+                return _cachedTask;
+            }
+
+            if (!options.EnableRemoteContentProbe && !item.IsFileProtocol)
+            {
+                return _cachedTask;
+            }
+
             var prober = new FFProbeAudioInfo(_mediaEncoder, _itemRepo, _appPaths, _json, _libraryManager);
 
             return prober.Probe(item, cancellationToken);

@@ -51,7 +51,7 @@ namespace MediaBrowser.Api.Images
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "Id", Description = "Item Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
-        public string Id { get; set; }
+        public Guid Id { get; set; }
     }
 
     /// <summary>
@@ -145,7 +145,7 @@ namespace MediaBrowser.Api.Images
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "Id", Description = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
-        public string Id { get; set; }
+        public Guid Id { get; set; }
     }
 
     /// <summary>
@@ -177,7 +177,7 @@ namespace MediaBrowser.Api.Images
         /// </summary>
         /// <value>The id.</value>
         [ApiMember(Name = "Id", Description = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "DELETE")]
-        public string Id { get; set; }
+        public Guid Id { get; set; }
     }
 
     /// <summary>
@@ -265,7 +265,7 @@ namespace MediaBrowser.Api.Images
 
             var result = GetItemImageInfos(item);
 
-            return ToOptimizedSerializedResultUsingCache(result);
+            return ToOptimizedResult(result);
         }
 
         /// <summary>
@@ -395,14 +395,14 @@ namespace MediaBrowser.Api.Images
         {
             var item = _userManager.GetUserById(request.Id);
 
-            return GetImage(request, null, item, false);
+            return GetImage(request, Guid.Empty, item, false);
         }
 
         public object Head(GetUserImage request)
         {
             var item = _userManager.GetUserById(request.Id);
 
-            return GetImage(request, null, item, true);
+            return GetImage(request, Guid.Empty, item, true);
         }
 
         public object Get(GetItemByNameImage request)
@@ -411,7 +411,7 @@ namespace MediaBrowser.Api.Images
 
             var item = GetItemByName(request.Name, type, _libraryManager, new DtoOptions(false));
 
-            return GetImage(request, item.Id.ToString("N"), item, false);
+            return GetImage(request, item.Id, item, false);
         }
 
         public object Head(GetItemByNameImage request)
@@ -420,7 +420,7 @@ namespace MediaBrowser.Api.Images
 
             var item = GetItemByName(request.Name, type, _libraryManager, new DtoOptions(false));
 
-            return GetImage(request, item.Id.ToString("N"), item, true);
+            return GetImage(request, item.Id, item, true);
         }
 
         /// <summary>
@@ -430,7 +430,7 @@ namespace MediaBrowser.Api.Images
         public Task Post(PostUserImage request)
         {
             var userId = GetPathValue(1);
-            AssertCanUpdateUser(_authContext, _userManager, userId, true);
+            AssertCanUpdateUser(_authContext, _userManager, new Guid(userId), true);
 
             request.Type = (ImageType)Enum.Parse(typeof(ImageType), GetPathValue(3), true);
 
@@ -511,7 +511,7 @@ namespace MediaBrowser.Api.Images
         /// <param name="isHeadRequest">if set to <c>true</c> [is head request].</param>
         /// <returns>System.Object.</returns>
         /// <exception cref="ResourceNotFoundException"></exception>
-        public Task<object> GetImage(ImageRequest request, string itemId, BaseItem item, bool isHeadRequest)
+        public Task<object> GetImage(ImageRequest request, Guid itemId, BaseItem item, bool isHeadRequest)
         {
             if (request.PercentPlayed.HasValue)
             {
@@ -546,11 +546,11 @@ namespace MediaBrowser.Api.Images
 
             if (imageInfo == null)
             {
-                var displayText = item == null ? itemId : item.Name;
+                var displayText = item == null ? itemId.ToString() : item.Name;
                 throw new ResourceNotFoundException(string.Format("{0} does not have an image of type {1}", displayText, request.Type));
             }
 
-            List<IImageEnhancer> supportedImageEnhancers;
+            IImageEnhancer[] supportedImageEnhancers;
 
             if (_imageProcessor.ImageEnhancers.Length > 0)
             {
@@ -559,11 +559,11 @@ namespace MediaBrowser.Api.Images
                     item = _libraryManager.GetItemById(itemId);
                 }
 
-                supportedImageEnhancers = request.EnableImageEnhancers ? _imageProcessor.GetSupportedEnhancers(item, request.Type) : new List<IImageEnhancer>();
+                supportedImageEnhancers = request.EnableImageEnhancers ? _imageProcessor.GetSupportedEnhancers(item, request.Type) : Array.Empty<IImageEnhancer>();
             }
             else
             {
-                supportedImageEnhancers = new List<IImageEnhancer>();
+                supportedImageEnhancers = Array.Empty<IImageEnhancer>();
             }
 
             var cropwhitespace = request.Type == ImageType.Logo ||
@@ -602,12 +602,12 @@ namespace MediaBrowser.Api.Images
         }
 
         private async Task<object> GetImageResult(BaseItem item,
-            string itemId,
+            Guid itemId,
             ImageRequest request,
             ItemImageInfo image,
             bool cropwhitespace,
             ImageFormat[] supportedFormats,
-            List<IImageEnhancer> enhancers,
+            IImageEnhancer[] enhancers,
             TimeSpan? cacheDuration,
             IDictionary<string, string> headers,
             bool isHeadRequest)
@@ -668,8 +668,8 @@ namespace MediaBrowser.Api.Images
 
         private ImageFormat[] GetClientSupportedFormats()
         {
-            //Logger.Debug("Request types: {0}", string.Join(",", Request.AcceptTypes ?? new string[] { }));
-            var supportedFormats = (Request.AcceptTypes ?? new string[] { }).Select(i => i.Split(';')[0]).ToArray();
+            //Logger.Debug("Request types: {0}", string.Join(",", Request.AcceptTypes ?? Array.Empty<string>()));
+            var supportedFormats = (Request.AcceptTypes ?? Array.Empty<string>()).Select(i => i.Split(';')[0]).ToArray();
             var acceptParam = Request.QueryString["accept"];
 
             var supportsWebP = SupportsFormat(supportedFormats, acceptParam, "webp", false);

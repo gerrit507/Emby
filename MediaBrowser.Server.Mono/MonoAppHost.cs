@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Emby.Server.CinemaMode;
 using Emby.Server.Connect;
 using Emby.Server.Implementations;
 using Emby.Server.Sync;
@@ -10,6 +9,7 @@ using MediaBrowser.Controller.Sync;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.System;
+using Emby.Server.Implementations.HttpServer;
 
 namespace MediaBrowser.Server.Mono
 {
@@ -48,7 +48,6 @@ namespace MediaBrowser.Server.Mono
             var list = new List<Assembly>();
 
             list.Add(GetType().Assembly);
-            list.Add(typeof(DefaultIntroProvider).Assembly);
             list.Add(typeof(ConnectManager).Assembly);
             list.Add(typeof(SyncManager).Assembly);
 
@@ -66,6 +65,20 @@ namespace MediaBrowser.Server.Mono
             {
                 return true;
             }
+        }
+
+        protected override IHttpListener CreateHttpListener()
+        {
+            return new EmbyServer.SocketSharp.WebSocketSharpListener(LogManager.GetLogger("HttpServer"),
+                Certificate,
+                StreamHelper,
+                TextEncoding,
+                NetworkManager,
+                SocketFactory,
+                CryptographyProvider,
+                SupportsDualModeSockets,
+                FileSystemManager,
+                EnvironmentInfo);
         }
     }
 }

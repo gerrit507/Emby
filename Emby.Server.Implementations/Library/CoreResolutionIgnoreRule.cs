@@ -25,7 +25,7 @@ namespace Emby.Server.Implementations.Library
         /// <summary>
         /// Any folder named in this list will be ignored - can be added to at runtime for extensibility
         /// </summary>
-        public static readonly List<string> IgnoreFolders = new List<string>
+        public static readonly Dictionary<string, string> IgnoreFolders = new List<string>
         {
                 "metadata",
                 "ps3_update",
@@ -41,10 +41,17 @@ namespace Emby.Server.Implementations.Library
                 "#recycle",
 
                 // Qnap
-                "@Recycle"
+                "@Recycle",
+                ".@__thumb",
+                "$RECYCLE.BIN",
+                "System Volume Information",
+                ".grab",
 
-        };
-        
+                // macos
+                ".AppleDouble"
+
+        }.ToDictionary(i => i, StringComparer.OrdinalIgnoreCase);
+
         public CoreResolutionIgnoreRule(IFileSystem fileSystem, ILibraryManager libraryManager, ILogger logger)
         {
             _fileSystem = fileSystem;
@@ -67,7 +74,6 @@ namespace Emby.Server.Implementations.Library
             }
 
             var filename = fileInfo.Name;
-            var isHidden = fileInfo.IsHidden;
             var path = fileInfo.FullName;
 
             // Handle mac .DS_Store
@@ -78,35 +84,35 @@ namespace Emby.Server.Implementations.Library
             }
 
             // Ignore hidden files and folders
-            if (isHidden)
-            {
-                if (parent == null)
-                {
-                    var parentFolderName = Path.GetFileName(_fileSystem.GetDirectoryName(path));
+            //if (fileInfo.IsHidden)
+            //{
+            //    if (parent == null)
+            //    {
+            //        var parentFolderName = Path.GetFileName(_fileSystem.GetDirectoryName(path));
 
-                    if (string.Equals(parentFolderName, BaseItem.ThemeSongsFolderName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return false;
-                    }
-                    if (string.Equals(parentFolderName, BaseItem.ThemeVideosFolderName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return false;
-                    }
-                }
+            //        if (string.Equals(parentFolderName, BaseItem.ThemeSongsFolderName, StringComparison.OrdinalIgnoreCase))
+            //        {
+            //            return false;
+            //        }
+            //        if (string.Equals(parentFolderName, BaseItem.ThemeVideosFolderName, StringComparison.OrdinalIgnoreCase))
+            //        {
+            //            return false;
+            //        }
+            //    }
 
-                // Sometimes these are marked hidden
-                if (_fileSystem.IsRootPath(path))
-                {
-                    return false;
-                }
+            //    // Sometimes these are marked hidden
+            //    if (_fileSystem.IsRootPath(path))
+            //    {
+            //        return false;
+            //    }
 
-                return true;
-            }
+            //    return true;
+            //}
 
             if (fileInfo.IsDirectory)
             {
                 // Ignore any folders in our list
-                if (IgnoreFolders.Contains(filename, StringComparer.OrdinalIgnoreCase))
+                if (IgnoreFolders.ContainsKey(filename))
                 {
                     return true;
                 }

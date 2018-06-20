@@ -187,18 +187,13 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         return;
                     }
 
-                    using (var ms = new MemoryStream())
+                    // These are not going to be valid xml so no sense in causing the provider to fail and spamming the log with exceptions
+                    try
                     {
-                        var bytes = Encoding.UTF8.GetBytes(xml);
-
-                        ms.Write(bytes, 0, bytes.Length);
-                        ms.Position = 0;
-
-                        // These are not going to be valid xml so no sense in causing the provider to fail and spamming the log with exceptions
-                        try
+                        using (var stringReader = new StringReader(xml))
                         {
                             // Use XmlReader for best performance
-                            using (var reader = XmlReader.Create(ms, settings))
+                            using (var reader = XmlReader.Create(stringReader, settings))
                             {
                                 reader.MoveToContent();
                                 reader.Read();
@@ -219,10 +214,10 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                                 }
                             }
                         }
-                        catch (XmlException)
-                        {
+                    }
+                    catch (XmlException)
+                    {
 
-                        }
                     }
                 }
             }
@@ -376,18 +371,6 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                         var val = reader.ReadElementContentAsString();
 
                         item.PreferredMetadataCountryCode = val;
-
-                        break;
-                    }
-
-                case "website":
-                    {
-                        var val = reader.ReadElementContentAsString();
-
-                        if (!string.IsNullOrWhiteSpace(val))
-                        {
-                            item.HomePageUrl = val;
-                        }
 
                         break;
                     }
@@ -977,7 +960,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
 
             value = value.Trim().Trim(separator);
 
-            return string.IsNullOrWhiteSpace(value) ? new string[] { } : Split(value, separator, StringSplitOptions.RemoveEmptyEntries);
+            return string.IsNullOrWhiteSpace(value) ? Array.Empty<string>() : Split(value, separator, StringSplitOptions.RemoveEmptyEntries);
         }
 
         /// <summary>

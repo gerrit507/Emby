@@ -88,14 +88,14 @@ namespace MediaBrowser.Api.UserLibrary
         {
             var user = _userManager.GetUserById(request.UserId);
 
-            var parentIdGuid = string.IsNullOrWhiteSpace(request.ParentId) ? (Guid?)null : new Guid(request.ParentId);
+            var parentIdGuid = string.IsNullOrWhiteSpace(request.ParentId) ? Guid.Empty : new Guid(request.ParentId);
 
             var options = GetDtoOptions(_authContext, request);
 
             var ancestorIds = new List<Guid>();
 
             var excludeFolderIds = user.Configuration.LatestItemsExcludes;
-            if (!parentIdGuid.HasValue && excludeFolderIds.Length > 0)
+            if (parentIdGuid.Equals(Guid.Empty) && excludeFolderIds.Length > 0)
             {
                 ancestorIds = _libraryManager.GetUserRootFolder().GetChildren(user, true)
                     .Where(i => i is Folder)
@@ -106,7 +106,7 @@ namespace MediaBrowser.Api.UserLibrary
 
             var itemsResult = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
             {
-                OrderBy = new[] { ItemSortBy.DatePlayed }.Select(i => new Tuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
+                OrderBy = new[] { ItemSortBy.DatePlayed }.Select(i => new ValueTuple<string, SortOrder>(i, SortOrder.Descending)).ToArray(),
                 IsResumable = true,
                 StartIndex = request.StartIndex,
                 Limit = request.Limit,
@@ -130,7 +130,7 @@ namespace MediaBrowser.Api.UserLibrary
                 Items = returnItems
             };
 
-            return ToOptimizedSerializedResultUsingCache(result);
+            return ToOptimizedResult(result);
         }
 
         /// <summary>
@@ -147,7 +147,7 @@ namespace MediaBrowser.Api.UserLibrary
 
             var result = GetItems(request);
 
-            return ToOptimizedSerializedResultUsingCache(result);
+            return ToOptimizedResult(result);
         }
 
         /// <summary>
@@ -156,7 +156,7 @@ namespace MediaBrowser.Api.UserLibrary
         /// <param name="request">The request.</param>
         private QueryResult<BaseItemDto> GetItems(GetItems request)
         {
-            var user = !string.IsNullOrWhiteSpace(request.UserId) ? _userManager.GetUserById(request.UserId) : null;
+            var user = !request.UserId.Equals(Guid.Empty) ? _userManager.GetUserById(request.UserId) : null;
 
             var dtoOptions = GetDtoOptions(_authContext, request);
 
@@ -272,7 +272,10 @@ namespace MediaBrowser.Api.UserLibrary
                 HasImdbId = request.HasImdbId,
                 IsPlaceHolder = request.IsPlaceHolder,
                 IsLocked = request.IsLocked,
-                IsHD = request.IsHD,
+                MinWidth = request.MinWidth,
+                MinHeight = request.MinHeight,
+                MaxWidth = request.MaxWidth,
+                MaxHeight = request.MaxHeight,
                 Is3D = request.Is3D,
                 HasTvdbId = request.HasTvdbId,
                 HasTmdbId = request.HasTmdbId,
@@ -287,28 +290,54 @@ namespace MediaBrowser.Api.UserLibrary
                 Tags = request.GetTags(),
                 OfficialRatings = request.GetOfficialRatings(),
                 Genres = request.GetGenres(),
-                ArtistIds = request.GetArtistIds(),
-                GenreIds = request.GetGenreIds(),
-                StudioIds = request.GetStudioIds(),
+                ArtistIds = GetGuids(request.ArtistIds),
+                GenreIds = GetGuids(request.GenreIds),
+                StudioIds = GetGuids(request.StudioIds),
                 Person = request.Person,
-                PersonIds = request.GetPersonIds(),
+                PersonIds = GetGuids(request.PersonIds),
                 PersonTypes = request.GetPersonTypes(),
                 Years = request.GetYears(),
                 ImageTypes = request.GetImageTypes(),
                 VideoTypes = request.GetVideoTypes(),
                 AdjacentTo = request.AdjacentTo,
-                ItemIds = request.GetItemIds(),
+                ItemIds = GetGuids(request.Ids),
                 MinPlayers = request.MinPlayers,
                 MaxPlayers = request.MaxPlayers,
                 MinCommunityRating = request.MinCommunityRating,
                 MinCriticRating = request.MinCriticRating,
-                ParentId = string.IsNullOrWhiteSpace(request.ParentId) ? (Guid?)null : new Guid(request.ParentId),
+                ParentId = string.IsNullOrWhiteSpace(request.ParentId) ? Guid.Empty : new Guid(request.ParentId),
                 ParentIndexNumber = request.ParentIndexNumber,
                 AiredDuringSeason = request.AiredDuringSeason,
                 EnableTotalRecordCount = request.EnableTotalRecordCount,
-                ExcludeItemIds = request.GetExcludeItemIds(),
+                ExcludeItemIds = GetGuids(request.ExcludeItemIds),
                 DtoOptions = dtoOptions
             };
+
+            if (request.IsHD.HasValue)
+            {
+                var threshold = 1200;
+                if (request.IsHD.Value)
+                {
+                    query.MinWidth = threshold;
+                }
+                else
+                {
+                    query.MaxWidth = threshold - 1;
+                }
+            }
+
+            if (request.Is4K.HasValue)
+            {
+                var threshold = 3800;
+                if (request.Is4K.Value)
+                {
+                    query.MinWidth = threshold;
+                }
+                else
+                {
+                    query.MaxWidth = threshold - 1;
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(request.Ids))
             {
@@ -427,12 +456,12 @@ namespace MediaBrowser.Api.UserLibrary
             // ExcludeArtistIds
             if (!string.IsNullOrWhiteSpace(request.ExcludeArtistIds))
             {
-                query.ExcludeArtistIds = request.GetGuids(request.ExcludeArtistIds);
+                query.ExcludeArtistIds = GetGuids(request.ExcludeArtistIds);
             }
 
             if (!string.IsNullOrWhiteSpace(request.AlbumIds))
             {
-                query.AlbumIds = request.GetGuids(request.AlbumIds);
+                query.AlbumIds = GetGuids(request.AlbumIds);
             }
 
             // Albums
@@ -473,10 +502,10 @@ namespace MediaBrowser.Api.UserLibrary
                 // Albums by artist
                 if (query.ArtistIds.Length > 0 && query.IncludeItemTypes.Length == 1 && string.Equals(query.IncludeItemTypes[0], "MusicAlbum", StringComparison.OrdinalIgnoreCase))
                 {
-                    query.OrderBy = new Tuple<string, SortOrder>[]
+                    query.OrderBy = new []
                     {
-                        new Tuple<string, SortOrder>(ItemSortBy.ProductionYear, SortOrder.Descending),
-                        new Tuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending)
+                        new ValueTuple<string, SortOrder>(ItemSortBy.ProductionYear, SortOrder.Descending),
+                        new ValueTuple<string, SortOrder>(ItemSortBy.SortName, SortOrder.Ascending)
                     };
                 }
             }
