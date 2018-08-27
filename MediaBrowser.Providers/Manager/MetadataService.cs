@@ -802,7 +802,7 @@ namespace MediaBrowser.Providers.Manager
                 await RunCustomProvider(provider, item, logName, options, refreshResult, cancellationToken).ConfigureAwait(false);
             }
 
-            ImportUserData(item, userDataList, cancellationToken);
+            //ImportUserData(item, userDataList, cancellationToken);
 
             return refreshResult;
         }
@@ -815,14 +815,6 @@ namespace MediaBrowser.Providers.Manager
             }
 
             return true;
-        }
-
-        private void ImportUserData(TItemType item, List<UserItemData> userDataList, CancellationToken cancellationToken)
-        {
-            foreach (var userData in userDataList)
-            {
-                UserDataManager.SaveUserData(userData.UserId, item, userData, UserDataSaveReason.Import, cancellationToken);
-            }
         }
 
         private async Task RunCustomProvider(ICustomMetadataProvider<TItemType> provider, TItemType item, string logName, MetadataRefreshOptions options, RefreshResult refreshResult, CancellationToken cancellationToken)

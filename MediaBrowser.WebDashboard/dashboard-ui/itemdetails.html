@@ -200,13 +200,17 @@
                 <div is="emby-itemscontainer" class="childrenItemsContainer itemsContainer padded-left padded-right" style="text-align: left;"></div>
             </div>
         </div>
-        <div id="additionalPartsCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderAdditionalParts}
-            </h2>
-            <div id="additionalPartsContent" is="emby-itemscontainer" class="itemsContainer vertical-wrap padded-left padded-right"></div>
+        <div id="additionalPartsCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderAdditionalParts}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div id="additionalPartsContent" is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
+            </div>
         </div>
-        <div class="verticalSection itemVerticalSection moreFromSeasonSection hide">
+        <div class="verticalSection moreFromSeasonSection hide">
             <h2 class="sectionTitle sectionTitle-cards padded-left padded-right"></h2>
 
             <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
@@ -216,78 +220,78 @@
                 </div>
             </div>
         </div>
-        <div class="verticalSection itemVerticalSection moreFromArtistSection padded-left padded-right hide">
-            <h2 class="sectionTitle sectionTitle-cards"></h2>
-            <div is="emby-itemscontainer" class="itemsContainer vertical-wrap focuscontainer-x"></div>
-        </div>
-        <div id="castCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 id="peopleHeader" class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderCastCrew}
-            </h2>
-            <div id="castContent" is="emby-itemscontainer" class="itemsContainer padded-left padded-right"></div>
-            <div class="padded-left">
-                <button is="emby-button" type="button" class="raised more morePeople hide">${ButtonMore}</button>
+        <div class="verticalSection moreFromArtistSection hide">
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right"></h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
             </div>
         </div>
+
+        <div id="castCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
+            <h2 id="peopleHeader" class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderCastCrew}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div id="castContent" is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
+            </div>
+        </div>
+
         <div id="seriesScheduleSection" class="verticalSection detailVerticalSection hide">
-            <h1>
+            <h2 class="sectionTitle padded-left padded-right">
                 ${HeaderUpcomingOnTV}
-            </h1>
+            </h2>
             <div id="seriesScheduleList" is="emby-itemscontainer" class="itemsContainer vertical-list padded-left padded-right"></div>
+            <br />
         </div>
 
-        <div class="verticalSection detailVerticalSection photoInfo hide">
-            <h2 class="sectionTitle padded-left">
-                ${HeaderPhotoInfo}
-            </h2>
-            <div class="photoInfoContent padded-left padded-right"></div>
+        <div id="specialsCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderSpecialFeatures}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div id="specialsContent" is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
+            </div>
         </div>
 
-        <div id="specialsCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderSpecialFeatures}
-            </h2>
-            <div id="specialsContent" is="emby-itemscontainer" class="itemsContainer vertical-wrap padded-left padded-right"></div>
-        </div>
-        <div id="musicVideosCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderMusicVideos}
-            </h2>
-            <div id="musicVideosContent" is="emby-itemscontainer" class="itemsContainer vertical-wrap padded-left padded-right"></div>
-        </div>
-        <div id="similarCollapsible" class="verticalSection verticalSection-extrabottompadding detailVerticalSection hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderMoreLikeThis}
-            </h2>
-            <div class="similarContent"></div>
-        </div>
-        <div id="criticReviewsCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle padded-left">
-                ${HeaderAwardsAndReviews}
-            </h2>
-            <div class="padded-left padded-right">
-                <div id="criticReviewsContent"></div>
+        <div id="musicVideosCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderMusicVideos}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div id="musicVideosContent" is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
             </div>
         </div>
 
         <div id="scenesCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderScenes}
-            </h2>
-            <div is="emby-itemscontainer" id="scenesContent" class="itemsContainer padded-left padded-right"></div>
-        </div>
-        <div id="themeSongsCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle padded-left">
-                ${HeaderThemeSongs}
-            </h2>
-            <div id="themeSongsContent" is="emby-itemscontainer" class="padded-left padded-right"></div>
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderScenes}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div id="scenesContent" is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right"></div>
+                </div>
+            </div>
         </div>
 
-        <div id="themeVideosCollapsible" class="verticalSection detailVerticalSection hide">
-            <h2 class="sectionTitle sectionTitle-cards padded-left">
-                ${HeaderThemeVideos}
-            </h2>
-            <div id="themeVideosContent" is="emby-itemscontainer" class="itemsContainer vertical-wrap padded-left padded-right"></div>
+        <div id="similarCollapsible" class="verticalSection verticalSection-extrabottompadding hide">
+            <h2 class="sectionTitle sectionTitle-cards padded-left padded-right">${HeaderMoreLikeThis}</h2>
+
+            <div is="emby-scroller" class="emby-scroller" data-mousewheel="false" data-centerfocus="true" data-horizontal="true">
+
+                <div class="scrollerframe padded-top-focusscale padded-bottom-focusscale">
+                    <div is="emby-itemscontainer" class="scrollSlider focuscontainer-x itemsContainer padded-left padded-right similarContent"></div>
+                </div>
+            </div>
         </div>
 
         <div class="verticalSection detailVerticalSection audioVideoMediaInfo hide">

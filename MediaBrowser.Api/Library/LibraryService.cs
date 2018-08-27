@@ -169,7 +169,7 @@ namespace MediaBrowser.Api.Library
     [Authenticated]
     public class DeleteItems : IReturnVoid
     {
-        [ApiMember(Name = "Ids", Description = "Ids", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "DELETE")]
+        [ApiMember(Name = "Ids", Description = "Ids", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "DELETE")]
         public string Ids { get; set; }
     }
 
@@ -225,7 +225,7 @@ namespace MediaBrowser.Api.Library
     [Authenticated]
     public class PostUpdatedSeries : IReturnVoid
     {
-        [ApiMember(Name = "TvdbId", Description = "Tvdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "GET")]
+        [ApiMember(Name = "TvdbId", Description = "Tvdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "POST")]
         public string TvdbId { get; set; }
     }
 
@@ -234,9 +234,9 @@ namespace MediaBrowser.Api.Library
     [Authenticated]
     public class PostUpdatedMovies : IReturnVoid
     {
-        [ApiMember(Name = "TmdbId", Description = "Tmdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "GET")]
+        [ApiMember(Name = "TmdbId", Description = "Tmdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "POST")]
         public string TmdbId { get; set; }
-        [ApiMember(Name = "ImdbId", Description = "Imdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "GET")]
+        [ApiMember(Name = "ImdbId", Description = "Imdb Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "POST")]
         public string ImdbId { get; set; }
     }
 
@@ -268,14 +268,20 @@ namespace MediaBrowser.Api.Library
         public string Id { get; set; }
     }
 
+    [Route("/Games/{Id}/Similar", "GET", Summary = "Finds games similar to a given game.")]
+    [Route("/Artists/{Id}/Similar", "GET", Summary = "Finds albums similar to a given album.")]
     [Route("/Items/{Id}/Similar", "GET", Summary = "Gets similar items")]
+    [Route("/Albums/{Id}/Similar", "GET", Summary = "Finds albums similar to a given album.")]
+    [Route("/Shows/{Id}/Similar", "GET", Summary = "Finds tv shows similar to a given one.")]
+    [Route("/Movies/{Id}/Similar", "GET", Summary = "Finds movies and trailers similar to a given movie.")]
+    [Route("/Trailers/{Id}/Similar", "GET", Summary = "Finds movies and trailers similar to a given trailer.")]
     [Authenticated]
     public class GetSimilarItems : BaseGetSimilarItemsFromItem
     {
     }
 
     [Route("/Libraries/AvailableOptions", "GET")]
-    [Authenticated]
+    [Authenticated(AllowBeforeStartupWizard = true)]
     public class GetLibraryOptionsInfo : IReturn<LibraryOptionsResult>
     {
         public string LibraryContentType { get; set; }
@@ -507,53 +513,6 @@ namespace MediaBrowser.Api.Library
                 (!string.IsNullOrWhiteSpace(request.UserId) ? _libraryManager.GetUserRootFolder() :
                 _libraryManager.RootFolder) : _libraryManager.GetItemById(request.Id);
 
-            if (item is Game)
-            {
-                return new GamesService(_userManager, _userDataManager, _libraryManager, _itemRepo, _dtoService, _authContext)
-                {
-                    Request = Request,
-
-                }.Get(new GetSimilarGames
-                {
-                    Fields = request.Fields,
-                    Id = request.Id,
-                    Limit = request.Limit,
-                    UserId = request.UserId,
-                    ImageTypeLimit = request.ImageTypeLimit
-                });
-            }
-            if (item is MusicAlbum)
-            {
-                return new AlbumsService(_userManager, _userDataManager, _libraryManager, _itemRepo, _dtoService, _authContext)
-                {
-                    Request = Request,
-
-                }.Get(new GetSimilarAlbums
-                {
-                    Fields = request.Fields,
-                    Id = request.Id,
-                    Limit = request.Limit,
-                    UserId = request.UserId,
-                    ExcludeArtistIds = request.ExcludeArtistIds,
-                    ImageTypeLimit = request.ImageTypeLimit
-                });
-            }
-            if (item is MusicArtist)
-            {
-                return new AlbumsService(_userManager, _userDataManager, _libraryManager, _itemRepo, _dtoService, _authContext)
-                {
-                    Request = Request,
-
-                }.Get(new GetSimilarArtists
-                {
-                    Fields = request.Fields,
-                    Id = request.Id,
-                    Limit = request.Limit,
-                    UserId = request.UserId,
-                    ImageTypeLimit = request.ImageTypeLimit
-                });
-            }
-
             var program = item as IHasProgramAttributes;
 
             if (item is Movie || (program != null && program.IsMovie) || item is Trailer)
@@ -562,33 +521,70 @@ namespace MediaBrowser.Api.Library
                 {
                     Request = Request,
 
-                }.Get(new GetSimilarMovies
-                {
-                    Fields = request.Fields,
-                    Id = request.Id,
-                    Limit = request.Limit,
-                    UserId = request.UserId,
-                    ImageTypeLimit = request.ImageTypeLimit
-                });
+                }.GetSimilarItemsResult(request);
             }
 
-            if (item is Series || (program != null && program.IsSeries))
+            if (program != null && program.IsSeries)
             {
-                return new TvShowsService(_userManager, _userDataManager, _libraryManager, _itemRepo, _dtoService, _tvManager, _authContext)
-                {
-                    Request = Request,
-
-                }.Get(new GetSimilarShows
-                {
-                    Fields = request.Fields,
-                    Id = request.Id,
-                    Limit = request.Limit,
-                    UserId = request.UserId,
-                    ImageTypeLimit = request.ImageTypeLimit
-                });
+                return GetSimilarItemsResult(request, new[] { typeof(Series).Name });
             }
 
-            return new QueryResult<BaseItemDto>();
+            if (item is Episode || (item is IItemByName && !(item is MusicArtist)))
+            {
+                return new QueryResult<BaseItemDto>();
+            }
+
+            return GetSimilarItemsResult(request, new[] { item.GetType().Name });
+        }
+
+        private QueryResult<BaseItemDto> GetSimilarItemsResult(BaseGetSimilarItemsFromItem request, string[] includeItemTypes)
+        {
+            var user = !request.UserId.Equals(Guid.Empty) ? _userManager.GetUserById(request.UserId) : null;
+
+            var item = string.IsNullOrEmpty(request.Id) ?
+                (!request.UserId.Equals(Guid.Empty) ? _libraryManager.GetUserRootFolder() :
+                _libraryManager.RootFolder) : _libraryManager.GetItemById(request.Id);
+
+            var dtoOptions = GetDtoOptions(_authContext, request);
+
+            var query = new InternalItemsQuery(user)
+            {
+                Limit = request.Limit,
+                IncludeItemTypes = includeItemTypes,
+                SimilarTo = item,
+                DtoOptions = dtoOptions,
+                EnableTotalRecordCount = false
+            };
+
+            // ExcludeArtistIds
+            if (!string.IsNullOrEmpty(request.ExcludeArtistIds))
+            {
+                query.ExcludeArtistIds = BaseApiService.GetGuids(request.ExcludeArtistIds);
+            }
+
+            List<BaseItem> itemsResult;
+
+            if (item is MusicArtist)
+            {
+                query.IncludeItemTypes = Array.Empty<string>();
+
+                itemsResult = _libraryManager.GetArtists(query).Items.Select(i => i.Item1).ToList();
+            }
+            else
+            {
+                itemsResult = _libraryManager.GetItemList(query);
+            }
+
+            var returnList = _dtoService.GetBaseItemDtos(itemsResult, dtoOptions, user);
+
+            var result = new QueryResult<BaseItemDto>
+            {
+                Items = returnList,
+
+                TotalRecordCount = itemsResult.Count
+            };
+
+            return result;
         }
 
         public object Get(GetMediaFolders request)
@@ -679,7 +675,7 @@ namespace MediaBrowser.Api.Library
             var item = _libraryManager.GetItemById(request.Id);
             var auth = _authContext.GetAuthorizationInfo(Request);
 
-            var user = _userManager.GetUserById(auth.UserId);
+            var user = auth.User;
 
             if (user != null)
             {
@@ -911,7 +907,7 @@ namespace MediaBrowser.Api.Library
             {
                 var item = _libraryManager.GetItemById(i);
                 var auth = _authContext.GetAuthorizationInfo(Request);
-                var user = _userManager.GetUserById(auth.UserId);
+                var user = auth.User;
 
                 if (!item.CanDelete(user))
                 {

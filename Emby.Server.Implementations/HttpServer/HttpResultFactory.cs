@@ -84,7 +84,18 @@ namespace Emby.Server.Implementations.HttpServer
 
             if (stream != null)
             {
-                result = new StreamWriter(stream, contentType, _logger);
+                var contentLength = content.Length;
+
+                if (isHeadRequest)
+                {
+                    content = Array.Empty<byte>();
+                }
+
+                result = new StreamWriter(content, contentType, contentLength, _logger);
+            }
+            else
+            {
+                result = GetCompressedResult(requestContext, content, compressionType, responseHeaders, isHeadRequest, contentType);
             }
 
             else
@@ -99,26 +110,11 @@ namespace Emby.Server.Implementations.HttpServer
                 {
                     var text = content as string;
 
-                    if (text != null)
-                    {
-                        var compressionType = requestContext == null ? null : GetCompressionType(requestContext);
-
-                        if (string.IsNullOrEmpty(compressionType))
-                        {
-                            result = new StreamWriter(Encoding.UTF8.GetBytes(text), contentType, _logger);
-                        }
-                        else
-                        {
-                            var isHeadRequest = string.Equals(requestContext.Verb, "head", StringComparison.OrdinalIgnoreCase);
-
-                            result = GetCompressedResult(Encoding.UTF8.GetBytes(text), compressionType, responseHeaders, isHeadRequest, contentType);
-                        }
-                    }
-                    else
-                    {
-                        result = new HttpResult(content, contentType, HttpStatusCode.OK);
-                    }
-                }
+                result = new StreamWriter(bytes, contentType, contentLength, _logger);
+            }
+            else
+            {
+                result = GetCompressedResult(requestContext, bytes, compressionType, responseHeaders, isHeadRequest, contentType);
             }
             if (responseHeaders == null)
             {
@@ -178,7 +174,10 @@ namespace Emby.Server.Implementations.HttpServer
 
             if (!string.IsNullOrWhiteSpace(acceptEncoding))
             {
-                if (acceptEncoding.Contains("deflate"))
+                if (_brotliCompressor != null && acceptEncoding.IndexOf("br", StringComparison.OrdinalIgnoreCase) != -1)
+                    return "br";
+
+                if (acceptEncoding.IndexOf("deflate", StringComparison.OrdinalIgnoreCase) != -1)
                     return "deflate";
 
                 if (acceptEncoding.Contains("gzip"))
@@ -235,7 +234,7 @@ namespace Emby.Server.Implementations.HttpServer
             return GetHttpResult(request, ms, contentType, true, responseHeaders);
         }
 
-        private IHasHeaders GetCompressedResult(byte[] content,
+        private IHasHeaders GetCompressedResult(IRequest requestContext, byte[] content,
             string requestedCompressionType,
             IDictionary<string, string> responseHeaders,
             bool isHeadRequest,
@@ -246,11 +245,17 @@ namespace Emby.Server.Implementations.HttpServer
                 responseHeaders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             }
 
-            // Per apple docs, hls manifests must be compressed
-            if ((contentType ?? string.Empty).IndexOf("application/x-mpegURL") != -1)
+            try
             {
                 content = Compress(content, requestedCompressionType);
                 responseHeaders["Content-Encoding"] = requestedCompressionType;
+
+                //var url = requestContext == null ? string.Empty : requestContext.RawUrl;
+                //_logger.Debug("Compressed to {0} {1}!", requestedCompressionType, url);
+            }
+            catch (Exception ex)
+            {
+                //_logger.Error("Error compressing: " + ex.Message);
             }
 
             responseHeaders["Vary"] = "Accept-Encoding";
@@ -272,7 +277,10 @@ namespace Emby.Server.Implementations.HttpServer
 
         private byte[] Compress(byte[] bytes, string compressionType)
         {
-            if (compressionType == "deflate")
+            if (string.Equals(compressionType, "br", StringComparison.OrdinalIgnoreCase))
+                return _brotliCompressor.Compress(bytes).ToArray();
+
+            if (string.Equals(compressionType, "deflate", StringComparison.OrdinalIgnoreCase))
                 return Deflate(bytes);
 
             if (compressionType == "gzip")
@@ -588,11 +596,24 @@ namespace Emby.Server.Implementations.HttpServer
                 return hasHeaders;
             }
 
-            if (!string.IsNullOrWhiteSpace(rangeHeader))
-            {
-                var stream = await factoryFn().ConfigureAwait(false);
+            var stream = await factoryFn().ConfigureAwait(false);
 
-                var hasHeaders = new RangeRequestWriter(rangeHeader, stream, contentType, isHeadRequest, _logger)
+            var totalContentLength = options.ContentLength;
+            if (!totalContentLength.HasValue)
+            {
+                try
+                {
+                    totalContentLength = stream.Length;
+                }
+                catch (NotSupportedException)
+                {
+
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(rangeHeader) && totalContentLength.HasValue)
+            {
+                var hasHeaders = new RangeRequestWriter(rangeHeader, totalContentLength.Value, stream, contentType, isHeadRequest, _logger)
                 {
                     OnComplete = options.OnComplete
                 };
@@ -602,15 +623,17 @@ namespace Emby.Server.Implementations.HttpServer
             }
             else
             {
-                var stream = await factoryFn().ConfigureAwait(false);
-
-                responseHeaders["Content-Length"] = stream.Length.ToString(UsCulture);
+                if (totalContentLength.HasValue)
+                {
+                    responseHeaders["Content-Length"] = totalContentLength.Value.ToString(UsCulture);
+                }
 
                 if (isHeadRequest)
                 {
-                    stream.Dispose();
-
-                    return GetHttpResult(requestContext, new byte[] { }, contentType, true, responseHeaders);
+                    using (stream)
+                    {
+                        return GetHttpResult(requestContext, Array.Empty<byte>(), contentType, true, responseHeaders);
+                    }
                 }
 
                 var hasHeaders = new StreamWriter(stream, contentType, _logger)
@@ -787,5 +810,10 @@ namespace Emby.Server.Implementations.HttpServer
                 hasHeaders.Headers[item.Key] = item.Value;
             }
         }
+    }
+
+    public interface IBrotliCompressor
+    {
+        Span<byte> Compress(Span<byte> content);
     }
 }

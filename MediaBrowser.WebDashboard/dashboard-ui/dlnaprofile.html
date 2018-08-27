@@ -1,4 +1,4 @@
-﻿<div id="dlnaProfilePage" data-role="page" class="page type-interior dlnaPage withTabs" data-helpurl="https://github.com/MediaBrowser/Wiki/wiki/Dlna%20profiles" data-require="jQuery,emby-collapse,jqmpopup,scripts/dlnaprofile,emby-button">
+﻿<div id="dlnaProfilePage" data-role="page" class="page type-interior dlnaPage withTabs" data-require="jQuery,emby-collapse,scripts/dlnaprofile,emby-button">
 
     <div data-role="content">
         <div class="content-primary">
@@ -286,7 +286,7 @@
 
         </div>
     </div>
-    <div data-role="popup" id="popupEditDirectPlayProfile" class="popup">
+    <div data-role="popup" id="popupEditDirectPlayProfile" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderDirectPlayProfile}</h3>
@@ -326,7 +326,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -334,7 +334,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="transcodingProfilePopup" class="popup">
+    <div data-role="popup" id="transcodingProfilePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderTranscodingProfile}</h3>
@@ -407,7 +407,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -415,7 +415,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="containerProfilePopup" class="popup">
+    <div data-role="popup" id="containerProfilePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderContainerProfile}</h3>
@@ -458,7 +458,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -466,7 +466,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="codecProfilePopup" class="popup">
+    <div data-role="popup" id="codecProfilePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderCodecProfile}</h3>
@@ -496,7 +496,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -504,7 +504,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="responseProfilePopup" class="popup">
+    <div data-role="popup" id="responseProfilePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderResponseProfile}</h3>
@@ -544,7 +544,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -552,7 +552,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="identificationHeaderPopup" class="popup">
+    <div data-role="popup" id="identificationHeaderPopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderIdentificationHeader}</h3>
@@ -584,7 +584,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -592,7 +592,7 @@
         </div>
 
     </div>
-    <div data-role="popup" id="xmlAttributePopup" class="popup">
+    <div data-role="popup" id="xmlAttributePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderXmlDocumentAttribute}</h3>
@@ -615,7 +615,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>
@@ -624,7 +624,7 @@
 
     </div>
 
-    <div data-role="popup" id="subtitleProfilePopup" class="popup">
+    <div data-role="popup" id="subtitleProfilePopup" class="dialog dialog-fixedSize dialog-small hide" style="position: fixed; top: 10%;">
 
         <div class="ui-bar-a" style="text-align: center; padding: 0 20px;">
             <h3>${HeaderSubtitleProfile}</h3>
@@ -660,7 +660,7 @@
                     <button type="submit" data-icon="check" data-mini="true">
                         ${ButtonOk}
                     </button>
-                    <button type="button" data-icon="delete" onclick="$(this).parents('.popup').popup('close');" data-mini="true">
+                    <button type="button" data-icon="delete" onclick="$(this).parents('.dialog').addClass('hide');" data-mini="true">
                         ${ButtonCancel}
                     </button>
                 </p>

@@ -23,21 +23,8 @@ namespace Emby.Server.Implementations.Browser
         /// <summary>
         /// Opens the community.
         /// </summary>
-        public static void OpenCommunity(IServerApplicationHost appHost)
-        {
-            OpenUrl(appHost, "https://emby.media/community");
-        }
-
-        public static void OpenEmbyPremiere(IServerApplicationHost appHost)
-        {
-            OpenDashboardPage("supporterkey.html", appHost);
-        }
-
-        /// <summary>
-        /// Opens the web client.
-        /// </summary>
         /// <param name="appHost">The app host.</param>
-        public static void OpenWebClient(IServerApplicationHost appHost)
+        public static void OpenWebApp(IServerApplicationHost appHost)
         {
             OpenDashboardPage("index.html", appHost);
         }

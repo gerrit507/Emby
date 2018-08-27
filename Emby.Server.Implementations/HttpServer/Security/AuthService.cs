@@ -63,9 +63,12 @@ namespace Emby.Server.Implementations.HttpServer.Security
                 }
             }
 
-            var user = string.IsNullOrEmpty(auth.UserId)
-                ? null
-                : UserManager.GetUserById(auth.UserId);
+            if (authAttribtues.AllowLocalOnly && !request.IsLocal)
+            {
+                throw new SecurityException("Operation not found.");
+            }
+
+            var user = auth.User;
 
             if (user == null & !string.IsNullOrEmpty(auth.UserId))
             {

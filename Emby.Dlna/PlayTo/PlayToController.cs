@@ -523,8 +523,7 @@ namespace Emby.Dlna.PlayTo
                     streamInfo.TargetRefFrames,
                     streamInfo.TargetVideoStreamCount,
                     streamInfo.TargetAudioStreamCount,
-                    streamInfo.TargetVideoCodecTag,
-                    streamInfo.IsTargetAVC);
+                    streamInfo.TargetVideoCodecTag);
 
                 return list.Count == 0 ? null : list[0];
             }
@@ -675,7 +674,7 @@ namespace Emby.Dlna.PlayTo
                             {
                                 int val;
 
-                                if (Int32.TryParse(arg, NumberStyles.Any, _usCulture, out val))
+                                if (int.TryParse(arg, NumberStyles.Integer, _usCulture, out val))
                                 {
                                     return SetAudioStreamIndex(val);
                                 }
@@ -693,7 +692,7 @@ namespace Emby.Dlna.PlayTo
                             {
                                 int val;
 
-                                if (Int32.TryParse(arg, NumberStyles.Any, _usCulture, out val))
+                                if (int.TryParse(arg, NumberStyles.Integer, _usCulture, out val))
                                 {
                                     return SetSubtitleStreamIndex(val);
                                 }
@@ -711,7 +710,7 @@ namespace Emby.Dlna.PlayTo
                             {
                                 int volume;
 
-                                if (Int32.TryParse(arg, NumberStyles.Any, _usCulture, out volume))
+                                if (int.TryParse(arg, NumberStyles.Integer, _usCulture, out volume))
                                 {
                                     return _device.SetVolume(volume, cancellationToken);
                                 }

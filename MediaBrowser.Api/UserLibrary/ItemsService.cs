@@ -119,7 +119,8 @@ namespace MediaBrowser.Api.UserLibrary
                 EnableTotalRecordCount = request.EnableTotalRecordCount,
                 AncestorIds = ancestorIds.ToArray(),
                 IncludeItemTypes = request.GetIncludeItemTypes(),
-                ExcludeItemTypes = request.GetExcludeItemTypes()
+                ExcludeItemTypes = request.GetExcludeItemTypes(),
+                SearchTerm = request.SearchTerm
             });
 
             var returnItems = _dtoService.GetBaseItemDtos(itemsResult.Items, options, user);
@@ -284,12 +285,16 @@ namespace MediaBrowser.Api.UserLibrary
                 HasThemeSong = request.HasThemeSong,
                 HasThemeVideo = request.HasThemeVideo,
                 HasTrailer = request.HasTrailer,
+                IsHD = request.IsHD,
+                Is4K = request.Is4K,
                 Tags = request.GetTags(),
                 OfficialRatings = request.GetOfficialRatings(),
                 Genres = request.GetGenres(),
-                ArtistIds = request.GetArtistIds(),
-                GenreIds = request.GetGenreIds(),
-                StudioIds = request.GetStudioIds(),
+                ArtistIds = GetGuids(request.ArtistIds),
+                AlbumArtistIds = GetGuids(request.AlbumArtistIds),
+                ContributingArtistIds = GetGuids(request.ContributingArtistIds),
+                GenreIds = GetGuids(request.GenreIds),
+                StudioIds = GetGuids(request.StudioIds),
                 Person = request.Person,
                 PersonIds = request.GetPersonIds(),
                 PersonTypes = request.GetPersonTypes(),
@@ -304,13 +309,13 @@ namespace MediaBrowser.Api.UserLibrary
                 MinCriticRating = request.MinCriticRating,
                 ParentId = string.IsNullOrWhiteSpace(request.ParentId) ? (Guid?)null : new Guid(request.ParentId),
                 ParentIndexNumber = request.ParentIndexNumber,
-                AiredDuringSeason = request.AiredDuringSeason,
                 EnableTotalRecordCount = request.EnableTotalRecordCount,
-                ExcludeItemIds = request.GetExcludeItemIds(),
-                DtoOptions = dtoOptions
+                ExcludeItemIds = GetGuids(request.ExcludeItemIds),
+                DtoOptions = dtoOptions,
+                SearchTerm = request.SearchTerm
             };
 
-            if (!string.IsNullOrWhiteSpace(request.Ids))
+            if (!string.IsNullOrWhiteSpace(request.Ids) || !string.IsNullOrWhiteSpace(request.SearchTerm))
             {
                 query.CollapseBoxSetItems = false;
             }

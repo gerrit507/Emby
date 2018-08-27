@@ -103,6 +103,7 @@ namespace MediaBrowser.Api.UserLibrary
         [ApiMember(Name = "HasTvdbId", Description = "Optional filter by items that have a tvdb id or not.", IsRequired = false, DataType = "bool", ParameterType = "query", Verb = "GET")]
         public bool? HasTvdbId { get; set; }
 
+        [ApiMember(Name = "ExcludeItemIds", Description = "Optional. If specified, results will be filtered by exxcluding item ids. This allows multiple, comma delimeted.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET", AllowMultiple = true)]
         public string ExcludeItemIds { get; set; }
 
         public bool EnableTotalRecordCount { get; set; }
@@ -127,6 +128,8 @@ namespace MediaBrowser.Api.UserLibrary
         /// <value><c>true</c> if recursive; otherwise, <c>false</c>.</value>
         [ApiMember(Name = "Recursive", Description = "When searching within folders, this determines whether or not the search will be recursive. true/false", IsRequired = false, DataType = "boolean", ParameterType = "query", Verb = "GET")]
         public bool Recursive { get; set; }
+
+        public string SearchTerm { get; set; }
 
         /// <summary>
         /// Gets or sets the sort order.
@@ -274,6 +277,10 @@ namespace MediaBrowser.Api.UserLibrary
         [ApiMember(Name = "ArtistIds", Description = "Optional. If specified, results will be filtered based on artist. This allows multiple, pipe delimeted.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET", AllowMultiple = true)]
         public string ArtistIds { get; set; }
 
+        public string AlbumArtistIds { get; set; }
+
+        public string ContributingArtistIds { get; set; }
+
         [ApiMember(Name = "Albums", Description = "Optional. If specified, results will be filtered based on album. This allows multiple, pipe delimeted.", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET", AllowMultiple = true)]
         public string Albums { get; set; }
 
@@ -297,8 +304,8 @@ namespace MediaBrowser.Api.UserLibrary
         /// Gets or sets the user id.
         /// </summary>
         /// <value>The user id.</value>
-        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "GET")]
-        public string UserId { get; set; }
+        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
+        public Guid UserId { get; set; }
 
         /// <summary>
         /// Gets or sets the min offical rating.

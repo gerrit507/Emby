@@ -71,7 +71,7 @@ namespace Emby.Server.Implementations.Session
 
         public event EventHandler<GenericEventArgs<AuthenticationRequest>> AuthenticationFailed;
 
-        public event EventHandler<GenericEventArgs<AuthenticationRequest>> AuthenticationSucceeded;
+        public event EventHandler<GenericEventArgs<AuthenticationResult>> AuthenticationSucceeded;
 
         /// <summary>
         /// Occurs when [playback start].
@@ -107,14 +107,33 @@ namespace Emby.Server.Implementations.Session
             _deviceManager = deviceManager;
             _mediaSourceManager = mediaSourceManager;
             _timerFactory = timerFactory;
-
             _deviceManager.DeviceOptionsUpdated += _deviceManager_DeviceOptionsUpdated;
+        }
+
+        private void _deviceManager_DeviceOptionsUpdated(object sender, GenericEventArgs<Tuple<string, DeviceOptions>> e)
+        {
+            foreach (var session in Sessions)
+            {
+                if (string.Equals(session.DeviceId, e.Argument.Item1))
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Argument.Item2.CustomName))
+                    {
+                        session.HasCustomDeviceName = true;
+                        session.DeviceName = e.Argument.Item2.CustomName;
+                    }
+                    else
+                    {
+                        session.HasCustomDeviceName = false;
+                    }
+                }
+            }
         }
 
         private bool _disposed;
         public void Dispose()
         {
             _disposed = true;
+            _deviceManager.DeviceOptionsUpdated -= _deviceManager_DeviceOptionsUpdated;
         }
 
         public void CheckDisposed()
@@ -122,17 +141,6 @@ namespace Emby.Server.Implementations.Session
             if (_disposed)
             {
                 throw new ObjectDisposedException(GetType().Name);
-            }
-        }
-
-        void _deviceManager_DeviceOptionsUpdated(object sender, GenericEventArgs<DeviceInfo> e)
-        {
-            foreach (var session in Sessions)
-            {
-                if (string.Equals(session.DeviceId, e.Argument.Id))
-                {
-                    session.DeviceName = e.Argument.Name;
-                }
             }
         }
 
@@ -153,7 +161,6 @@ namespace Emby.Server.Implementations.Session
 
                 if (capabilities != null)
                 {
-                    info.AppIconUrl = capabilities.IconUrl;
                     ReportCapabilities(info, capabilities, false);
                 }
             }
@@ -184,19 +191,7 @@ namespace Emby.Server.Implementations.Session
 
             if (session != null)
             {
-                var deviceId = session.DeviceId;
-
-                if (!string.IsNullOrEmpty(deviceId))
-                {
-                    var device = _deviceManager.GetDevice(deviceId);
-
-                    if (device != null)
-                    {
-                        device = _deviceManager.RegisterDevice(device.Id, deviceName, device.AppName, device.AppVersion, device.LastUserId, device.LastUserName);
-
-                        session.DeviceName = device.Name;
-                    }
-                }
+                session.DeviceName = deviceName;
             }
         }
 
@@ -404,6 +399,13 @@ namespace Emby.Server.Implementations.Session
             sessionInfo.UserId = userId;
             sessionInfo.UserName = username;
             sessionInfo.RemoteEndPoint = remoteEndPoint;
+            sessionInfo.Client = appName;
+
+            if (!sessionInfo.HasCustomDeviceName || string.IsNullOrEmpty(sessionInfo.DeviceName))
+            {
+                sessionInfo.DeviceName = deviceName;
+            }
+
             sessionInfo.ApplicationVersion = appVersion;
 
             if (!userId.HasValue)
@@ -416,14 +418,13 @@ namespace Emby.Server.Implementations.Session
 
         private SessionInfo CreateSession(string key, string appName, string appVersion, string deviceId, string deviceName, string remoteEndPoint, Guid? userId, string username)
         {
-            DeviceInfo device = null;
-
             var sessionInfo = new SessionInfo(this, _logger)
             {
                 AppName = appName,
                 DeviceId = deviceId,
                 ApplicationVersion = appVersion,
-                Id = key.GetMD5().ToString("N")
+                Id = key.GetMD5().ToString("N"),
+                ServerId = _appHost.SystemId
             };
 
             sessionInfo.UserId = userId;
@@ -435,21 +436,16 @@ namespace Emby.Server.Implementations.Session
                 deviceName = "Network Device";
             }
 
-            if (!string.IsNullOrEmpty(deviceId))
+            var deviceOptions = _deviceManager.GetDeviceOptions(deviceId);
+            if (string.IsNullOrEmpty(deviceOptions.CustomName))
             {
-                var userIdString = userId.HasValue ? userId.Value.ToString("N") : null;
-                device = _deviceManager.RegisterDevice(deviceId, deviceName, appName, appVersion, userIdString, username);
+                sessionInfo.DeviceName = deviceName;
             }
-
-            if (device != null)
+            else
             {
-                if (!string.IsNullOrEmpty(device.CustomName))
-                {
-                    deviceName = device.CustomName;
-                }
+                sessionInfo.DeviceName = deviceOptions.CustomName;
+                sessionInfo.HasCustomDeviceName = true;
             }
-
-            sessionInfo.DeviceName = deviceName;
 
             OnSessionStarted(sessionInfo);
             return sessionInfo;
@@ -593,7 +589,7 @@ namespace Emby.Server.Implementations.Session
             {
                 foreach (var user in users)
                 {
-                    OnPlaybackStart(user.Id, libraryItem);
+                    OnPlaybackStart(user, libraryItem);
                 }
             }
 
@@ -619,9 +615,9 @@ namespace Emby.Server.Implementations.Session
         /// </summary>
         /// <param name="userId">The user identifier.</param>
         /// <param name="item">The item.</param>
-        private void OnPlaybackStart(Guid userId, BaseItem item)
+        private void OnPlaybackStart(User user, BaseItem item)
         {
-            var data = _userDataManager.GetUserData(userId, item);
+            var data = _userDataManager.GetUserData(user, item);
 
             data.PlayCount++;
             data.LastPlayedDate = DateTime.UtcNow;
@@ -638,7 +634,7 @@ namespace Emby.Server.Implementations.Session
                 data.Played = false;
             }
 
-            _userDataManager.SaveUserData(userId, item, data, UserDataSaveReason.PlaybackStart, CancellationToken.None);
+            _userDataManager.SaveUserData(user, item, data, UserDataSaveReason.PlaybackStart, CancellationToken.None);
         }
 
         public Task OnPlaybackProgress(PlaybackProgressInfo info)
@@ -703,39 +699,70 @@ namespace Emby.Server.Implementations.Session
 
         private void OnPlaybackProgress(User user, BaseItem item, PlaybackProgressInfo info)
         {
-            var data = _userDataManager.GetUserData(user.Id, item);
+            var data = _userDataManager.GetUserData(user, item);
 
             var positionTicks = info.PositionTicks;
+
+            var changed = false;
 
             if (positionTicks.HasValue)
             {
                 _userDataManager.UpdatePlayState(item, data, positionTicks.Value);
-
-                UpdatePlaybackSettings(user, info, data);
-
-                _userDataManager.SaveUserData(user.Id, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
+                changed = true;
             }
+
+            var tracksChanged = UpdatePlaybackSettings(user, info, data);
+            if (!tracksChanged)
+            {
+                changed = true;
+            }
+
+            if (changed)
+            {
+                _userDataManager.SaveUserData(user, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
+            }
+
         }
 
-        private void UpdatePlaybackSettings(User user, PlaybackProgressInfo info, UserItemData data)
+        private bool UpdatePlaybackSettings(User user, PlaybackProgressInfo info, UserItemData data)
         {
+            var changed = false;
+
             if (user.Configuration.RememberAudioSelections)
             {
-                data.AudioStreamIndex = info.AudioStreamIndex;
+                if (data.AudioStreamIndex != info.AudioStreamIndex)
+                {
+                    data.AudioStreamIndex = info.AudioStreamIndex;
+                    changed = true;
+                }
             }
             else
             {
-                data.AudioStreamIndex = null;
+                if (data.AudioStreamIndex.HasValue)
+                {
+                    data.AudioStreamIndex = null;
+                    changed = true;
+                }
             }
 
             if (user.Configuration.RememberSubtitleSelections)
             {
-                data.SubtitleStreamIndex = info.SubtitleStreamIndex;
+                if (data.SubtitleStreamIndex != info.SubtitleStreamIndex)
+                {
+                    data.SubtitleStreamIndex = info.SubtitleStreamIndex;
+                    changed = true;
+                }
             }
             else
             {
-                data.SubtitleStreamIndex = null;
+                if (data.SubtitleStreamIndex.HasValue)
+                {
+                    data.SubtitleStreamIndex = null;
+                    changed = true;
+                }
             }
+
+            return changed;
         }
 
         /// <summary>
@@ -815,7 +842,7 @@ namespace Emby.Server.Implementations.Session
             {
                 foreach (var user in users)
                 {
-                    playedToCompletion = OnPlaybackStopped(user.Id, libraryItem, info.PositionTicks, info.Failed);
+                    playedToCompletion = OnPlaybackStopped(user, libraryItem, info.PositionTicks, info.Failed);
                 }
             }
 
@@ -846,13 +873,13 @@ namespace Emby.Server.Implementations.Session
             }, _logger);
         }
 
-        private bool OnPlaybackStopped(Guid userId, BaseItem item, long? positionTicks, bool playbackFailed)
+        private bool OnPlaybackStopped(User user, BaseItem item, long? positionTicks, bool playbackFailed)
         {
             bool playedToCompletion = false;
 
             if (!playbackFailed)
             {
-                var data = _userDataManager.GetUserData(userId, item);
+                var data = _userDataManager.GetUserData(user, item);
 
                 if (positionTicks.HasValue)
                 {
@@ -867,7 +894,7 @@ namespace Emby.Server.Implementations.Session
                     playedToCompletion = true;
                 }
 
-                _userDataManager.SaveUserData(userId, item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None);
+                _userDataManager.SaveUserData(user, item, data, UserDataSaveReason.PlaybackFinished, CancellationToken.None);
             }
 
             return playedToCompletion;
@@ -1357,9 +1384,7 @@ namespace Emby.Server.Implementations.Session
                 user = result;
             }
 
-            var token = GetAuthorizationToken(user.Id.ToString("N"), request.DeviceId, request.App, request.AppVersion, request.DeviceName);
-
-            EventHelper.FireEventIfNotNull(AuthenticationSucceeded, this, new GenericEventArgs<AuthenticationRequest>(request), _logger);
+            var token = GetAuthorizationToken(user, request.DeviceId, request.App, request.AppVersion, request.DeviceName);
 
             var session = LogSessionActivity(request.App,
                 request.AppVersion,
@@ -1368,46 +1393,73 @@ namespace Emby.Server.Implementations.Session
                 request.RemoteEndPoint,
                 user);
 
-            return new AuthenticationResult
+            var returnResult = new AuthenticationResult
             {
                 User = _userManager.GetUserDto(user, request.RemoteEndPoint),
                 SessionInfo = GetSessionInfoDto(session),
                 AccessToken = token,
                 ServerId = _appHost.SystemId
             };
+
+            EventHelper.FireEventIfNotNull(AuthenticationSucceeded, this, new GenericEventArgs<AuthenticationResult>(returnResult), _logger);
+
+            return returnResult;
         }
 
-        private string GetAuthorizationToken(string userId, string deviceId, string app, string appVersion, string deviceName)
+        private string GetAuthorizationToken(User user, string deviceId, string app, string appVersion, string deviceName)
         {
             var existing = _authRepo.Get(new AuthenticationInfoQuery
             {
                 DeviceId = deviceId,
-                IsActive = true,
-                UserId = userId,
+                UserId = user.Id,
                 Limit = 1
-            });
 
-            if (existing.Items.Length > 0)
+            }).Items.FirstOrDefault();
+
+            var allExistingForDevice = _authRepo.Get(new AuthenticationInfoQuery
             {
-                var token = existing.Items[0].AccessToken;
-                _logger.Info("Reissuing access token: " + token);
-                return token;
+                DeviceId = deviceId
+
+            }).Items;
+
+            foreach (var auth in allExistingForDevice)
+            {
+                if (existing == null || !string.Equals(auth.AccessToken, existing.AccessToken, StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        Logout(auth);
+                    }
+                    catch
+                    {
+
+                    }
+                }
             }
+
+            if (existing != null)
+            {
+                _logger.Info("Reissuing access token: " + existing.AccessToken);
+                return existing.AccessToken;
+            }
+
+            var now = DateTime.UtcNow;
 
             var newToken = new AuthenticationInfo
             {
                 AppName = app,
                 AppVersion = appVersion,
-                DateCreated = DateTime.UtcNow,
+                DateCreated = now,
+                DateLastActivity = now,
                 DeviceId = deviceId,
                 DeviceName = deviceName,
-                UserId = userId,
-                IsActive = true,
-                AccessToken = Guid.NewGuid().ToString("N")
+                UserId = user.Id,
+                AccessToken = Guid.NewGuid().ToString("N"),
+                UserName = user.Name
             };
 
-            _logger.Info("Creating new access token for user {0}", userId);
-            _authRepo.Create(newToken, CancellationToken.None);
+            _logger.Info("Creating new access token for user {0}", user.Id);
+            _authRepo.Create(newToken);
 
             return newToken.AccessToken;
         }
@@ -1421,8 +1473,6 @@ namespace Emby.Server.Implementations.Session
                 throw new ArgumentNullException("accessToken");
             }
 
-            _logger.Info("Logging out access token {0}", accessToken);
-
             var existing = _authRepo.Get(new AuthenticationInfoQuery
             {
                 Limit = 1,
@@ -1432,24 +1482,31 @@ namespace Emby.Server.Implementations.Session
 
             if (existing != null)
             {
-                existing.IsActive = false;
+                Logout(existing);
+            }
+        }
 
-                _authRepo.Update(existing, CancellationToken.None);
+        public void Logout(AuthenticationInfo existing)
+        {
+            CheckDisposed();
 
-                var sessions = Sessions
-                    .Where(i => string.Equals(i.DeviceId, existing.DeviceId, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+            _logger.Info("Logging out access token {0}", existing.AccessToken);
 
-                foreach (var session in sessions)
+            _authRepo.Delete(existing);
+
+            var sessions = Sessions
+                .Where(i => string.Equals(i.DeviceId, existing.DeviceId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var session in sessions)
+            {
+                try
                 {
-                    try
-                    {
-                        ReportSessionEnded(session.Id);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.ErrorException("Error reporting session ended", ex);
-                    }
+                    ReportSessionEnded(session.Id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.ErrorException("Error reporting session ended", ex);
                 }
             }
         }
@@ -1460,7 +1517,6 @@ namespace Emby.Server.Implementations.Session
 
             var existing = _authRepo.Get(new AuthenticationInfoQuery
             {
-                IsActive = true,
                 UserId = userId
             });
 
@@ -1468,7 +1524,7 @@ namespace Emby.Server.Implementations.Session
             {
                 if (!string.Equals(currentAccessToken, info.AccessToken, StringComparison.OrdinalIgnoreCase))
                 {
-                    Logout(info.AccessToken);
+                    Logout(info);
                 }
             }
         }
@@ -1612,7 +1668,6 @@ namespace Emby.Server.Implementations.Session
                 var fields = dtoOptions.Fields.ToList();
 
                 fields.Remove(ItemFields.BasicSyncInfo);
-                fields.Remove(ItemFields.SyncInfo);
                 fields.Remove(ItemFields.CanDelete);
                 fields.Remove(ItemFields.CanDownload);
                 fields.Remove(ItemFields.ChildCount);
@@ -1638,8 +1693,7 @@ namespace Emby.Server.Implementations.Session
                 fields.Remove(ItemFields.Settings);
                 fields.Remove(ItemFields.SortName);
                 fields.Remove(ItemFields.Tags);
-                fields.Remove(ItemFields.ThemeSongIds);
-                fields.Remove(ItemFields.ThemeVideoIds);
+                fields.Remove(ItemFields.ExtraIds);
 
                 dtoOptions.Fields = fields.ToArray(fields.Count);
 
@@ -1734,22 +1788,7 @@ namespace Emby.Server.Implementations.Session
             var deviceName = info.DeviceName;
             var appName = info.AppName;
 
-            if (!string.IsNullOrEmpty(deviceId))
-            {
-                // Replace the info from the token with more recent info
-                var device = _deviceManager.GetDevice(deviceId);
-                if (device != null)
-                {
-                    deviceName = device.Name;
-                    appName = device.AppName;
-
-                    if (!string.IsNullOrEmpty(device.AppVersion))
-                    {
-                        appVersion = device.AppVersion;
-                    }
-                }
-            }
-            else
+            if (string.IsNullOrEmpty(deviceId))
             {
                 deviceId = info.DeviceId;
             }
@@ -1840,8 +1879,7 @@ namespace Emby.Server.Implementations.Session
             return Task.WhenAll(tasks);
         }
 
-        public Task SendMessageToUserDeviceSessions<T>(string deviceId, string name, T data,
-            CancellationToken cancellationToken)
+        public Task SendMessageToUserDeviceSessions<T>(string deviceId, string name, T data, CancellationToken cancellationToken)
         {
             CheckDisposed();
 
@@ -1861,6 +1899,37 @@ namespace Emby.Server.Implementations.Session
             }, cancellationToken)).ToArray();
 
             return Task.WhenAll(tasks);
+        }
+
+        public Task SendMessageToUserDeviceAndAdminSessions<T>(string deviceId, string name, T data, CancellationToken cancellationToken)
+        {
+            CheckDisposed();
+
+            var sessions = Sessions
+                .Where(i => string.Equals(i.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase) || IsAdminSession(i))
+                .ToList();
+
+            var tasks = sessions.Select(session => Task.Run(async () =>
+            {
+                try
+                {
+                    await SendMessageToSession(session, name, data, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.ErrorException("Error sending message", ex);
+                }
+
+            }, cancellationToken)).ToArray();
+
+            return Task.WhenAll(tasks);
+        }
+
+        private bool IsAdminSession(SessionInfo s)
+        {
+            var user = _userManager.GetUserById(s.UserId);
+
+            return user != null && user.Policy.IsAdministrator;
         }
     }
 }

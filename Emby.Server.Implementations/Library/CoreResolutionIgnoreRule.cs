@@ -22,6 +22,8 @@ namespace Emby.Server.Implementations.Library
         private readonly ILibraryManager _libraryManager;
         private readonly ILogger _logger;
 
+        private bool _ignoreDotPrefix;
+
         /// <summary>
         /// Any folder named in this list will be ignored - can be added to at runtime for extensibility
         /// </summary>
@@ -50,6 +52,8 @@ namespace Emby.Server.Implementations.Library
             _fileSystem = fileSystem;
             _libraryManager = libraryManager;
             _logger = logger;
+
+            _ignoreDotPrefix = Environment.OSVersion.Platform != PlatformID.Win32NT;
         }
 
         /// <summary>
@@ -72,9 +76,12 @@ namespace Emby.Server.Implementations.Library
 
             // Handle mac .DS_Store
             // https://github.com/MediaBrowser/MediaBrowser/issues/427
-            if (filename.IndexOf("._", StringComparison.OrdinalIgnoreCase) == 0)
+            if (_ignoreDotPrefix)
             {
-                return true;
+                if (filename.IndexOf('.') == 0)
+                {
+                    return true;
+                }
             }
 
             // Ignore hidden files and folders
@@ -113,21 +120,23 @@ namespace Emby.Server.Implementations.Library
 
                 if (parent != null)
                 {
-                    // Ignore trailer folders but allow it at the collection level
-                    if (string.Equals(filename, BaseItem.TrailerFolderName, StringComparison.OrdinalIgnoreCase) &&
-                        !(parent is AggregateFolder) && !(parent is UserRootFolder))
+                    if (!(parent is AggregateFolder) && !(parent is UserRootFolder))
                     {
-                        return true;
-                    }
+                        // Ignore these but allow it at the collection level
+                        if (string.Equals(filename, BaseItem.TrailerFolderName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
 
-                    if (string.Equals(filename, BaseItem.ThemeVideosFolderName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
+                        if (string.Equals(filename, BaseItem.ThemeVideosFolderName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
 
-                    if (string.Equals(filename, BaseItem.ThemeSongsFolderName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
+                        if (string.Equals(filename, BaseItem.ThemeSongsFolderName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return true;
+                        }
                     }
                 }
             }
