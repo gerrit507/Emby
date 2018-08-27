@@ -199,14 +199,11 @@ namespace Emby.Dlna.Main
 
             try
             {
-                Func<int> deviceCacheSecondsFn = () => _config.GetDlnaConfiguration().AliveMessageIntervalSeconds;
-
-                _Publisher = new SsdpDevicePublisher(_communicationsServer, _timerFactory, _environmentInfo.OperatingSystemName, _environmentInfo.OperatingSystemVersion, deviceCacheSecondsFn);
+                _Publisher = new SsdpDevicePublisher(_communicationsServer, _timerFactory, _environmentInfo.OperatingSystemName, _environmentInfo.OperatingSystemVersion);
                 _Publisher.LogFunction = LogMessage;
+                _Publisher.SupportPnpRootDevice = false;
 
                 await RegisterServerEndpoints().ConfigureAwait(false);
-
-                _Publisher.StartBroadcastingAliveMessages(TimeSpan.FromSeconds(deviceCacheSecondsFn()));
             }
             catch (Exception ex)
             {
@@ -239,6 +236,7 @@ namespace Emby.Dlna.Main
 
                 var device = new SsdpRootDevice
                 {
+                    CacheLifetime = TimeSpan.FromSeconds(cacheLength), //How long SSDP clients can cache this info.
                     Location = uri, // Must point to the URL that serves your devices UPnP description document. 
                     FriendlyName = "Emby Server",
                     Manufacturer = "Emby",

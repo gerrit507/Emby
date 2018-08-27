@@ -82,7 +82,7 @@ namespace MediaBrowser.Api
         {
             var auth = authContext.GetAuthorizationInfo(Request);
 
-            var authenticatedUser = auth.User;
+            var authenticatedUser = userManager.GetUserById(auth.UserId);
 
             // If they're going to update the record of another user, they must be an administrator
             if (!string.Equals(userId, auth.UserId, StringComparison.OrdinalIgnoreCase))
@@ -143,7 +143,11 @@ namespace MediaBrowser.Api
                 options.Fields = hasFields.GetItemFields();
             }
 
-            if (!options.ContainsField(Model.Querying.ItemFields.RecursiveItemCount) || !options.ContainsField(Model.Querying.ItemFields.ChildCount))
+            var client = authInfo.Client ?? string.Empty;
+            if (client.IndexOf("kodi", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("wmc", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("media center", StringComparison.OrdinalIgnoreCase) != -1 ||
+                client.IndexOf("classic", StringComparison.OrdinalIgnoreCase) != -1)
             {
                 var list = options.Fields.ToList();
                 list.Add(Model.Querying.ItemFields.RecursiveItemCount);
@@ -285,7 +289,7 @@ namespace MediaBrowser.Api
                 IncludeItemTypes = new[] { typeof(T).Name },
                 DtoOptions = dtoOptions
 
-            }).OfType<T>().FirstOrDefault();
+            }).OfType<Person>().FirstOrDefault();
 
             if (result == null)
             {
@@ -295,7 +299,7 @@ namespace MediaBrowser.Api
                     IncludeItemTypes = new[] { typeof(T).Name },
                     DtoOptions = dtoOptions
 
-                }).OfType<T>().FirstOrDefault();
+                }).OfType<Person>().FirstOrDefault();
             }
 
             if (result == null)
@@ -306,10 +310,10 @@ namespace MediaBrowser.Api
                     IncludeItemTypes = new[] { typeof(T).Name },
                     DtoOptions = dtoOptions
 
-                }).OfType<T>().FirstOrDefault();
+                }).OfType<Person>().FirstOrDefault();
             }
 
-            return result;
+            return result as T;
         }
 
         protected string GetPathValue(int index)

@@ -60,13 +60,5 @@ namespace MediaBrowser.Providers.BoxSets
                 return true;
             }
         }
-
-        protected override bool EnableUpdatingPremiereDateFromChildren
-        {
-            get
-            {
-                return true;
-            }
-        }
     }
 }

@@ -541,9 +541,13 @@ namespace MediaBrowser.XbmcMetadata.Savers
                 writer.WriteElementString("credits", person);
             }
 
-            foreach (var trailer in item.RemoteTrailers)
+            var hasTrailer = item as IHasTrailers;
+            if (hasTrailer != null)
             {
-                writer.WriteElementString("trailer", GetOutputTrailerUrl(trailer.Url));
+                foreach (var trailer in hasTrailer.RemoteTrailers)
+                {
+                    writer.WriteElementString("trailer", GetOutputTrailerUrl(trailer.Url));
+                }
             }
 
             if (item.CommunityRating.HasValue)

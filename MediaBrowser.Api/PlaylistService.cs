@@ -21,10 +21,10 @@ namespace MediaBrowser.Api
         [ApiMember(Name = "Ids", Description = "Item Ids to add to the playlist", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "POST", AllowMultiple = true)]
         public string Ids { get; set; }
 
-        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
-        public Guid UserId { get; set; }
+        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
+        public string UserId { get; set; }
 
-        [ApiMember(Name = "MediaType", Description = "The playlist media type", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "POST")]
+        [ApiMember(Name = "MediaType", Description = "The playlist media type", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
         public string MediaType { get; set; }
     }
 

@@ -76,8 +76,8 @@ namespace Emby.Server.Implementations.UserViews
                 Recursive = recursive,
                 DtoOptions = new DtoOptions(false),
                 ImageTypes = new ImageType[] { ImageType.Primary },
-                Limit = 8,
-                OrderBy = new ValueTuple<string, SortOrder>[]
+                Limit = 4,
+                OrderBy = new Tuple<string, SortOrder>[]
                 {
                     new Tuple<string, SortOrder>(ItemSortBy.Random, SortOrder.Ascending)
                 },

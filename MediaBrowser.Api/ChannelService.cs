@@ -23,8 +23,8 @@ namespace MediaBrowser.Api
         /// Gets or sets the user id.
         /// </summary>
         /// <value>The user id.</value>
-        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
-        public Guid UserId { get; set; }
+        [ApiMember(Name = "UserId", Description = "User Id", IsRequired = false, DataType = "string", ParameterType = "path", Verb = "GET")]
+        public string UserId { get; set; }
 
         /// <summary>
         /// Skips over a given number of items within the results. Use for paging.
@@ -297,6 +297,7 @@ namespace MediaBrowser.Api
                 {
                     Fields = request.GetItemFields()
                 }
+
             };
 
             foreach (var filter in request.GetFilters())

@@ -32,8 +32,8 @@ namespace Emby.Server.Implementations.ScheduledTasks
         /// <summary>
         /// The _task queue
         /// </summary>
-        private readonly Queue<Tuple<Type, TaskOptions>> _taskQueue =
-            new Queue<Tuple<Type, TaskOptions>>();
+        private readonly ConcurrentQueue<Tuple<Type, TaskOptions>> _taskQueue =
+            new ConcurrentQueue<Tuple<Type, TaskOptions>>();
 
         /// <summary>
         /// Gets or sets the json serializer.
@@ -351,20 +351,6 @@ namespace Emby.Server.Implementations.ScheduledTasks
             ExecuteQueuedTasks();
         }
 
-        private bool TryDequeue(out Tuple<Type, TaskOptions> item)
-        {
-            try
-            {
-                item = _taskQueue.Dequeue();
-                return true;
-            }
-            catch (InvalidOperationException)
-            {
-                item = null;
-                return false;
-            }
-        }
-
         /// <summary>
         /// Executes the queued tasks.
         /// </summary>
@@ -378,7 +364,7 @@ namespace Emby.Server.Implementations.ScheduledTasks
                 var list = new List<Tuple<Type, TaskOptions>>();
 
                 Tuple<Type, TaskOptions> item;
-                while (TryDequeue(out item))
+                while (_taskQueue.TryDequeue(out item))
                 {
                     if (list.All(i => i.Item1 != item.Item1))
                     {

@@ -30,7 +30,7 @@ namespace Emby.Server.Implementations.IO
 
         private string _defaultDirectory;
 
-        public ManagedFileSystem(ILogger logger, IEnvironmentInfo environmentInfo, string defaultDirectory, string tempPath, bool enableSeparateFileAndDirectoryQueries)
+        public ManagedFileSystem(ILogger logger, IEnvironmentInfo environmentInfo, string defaultDirectory, string tempPath)
         {
             Logger = logger;
             _supportsAsyncFileStreams = true;
@@ -38,8 +38,10 @@ namespace Emby.Server.Implementations.IO
             _environmentInfo = environmentInfo;
             _defaultDirectory = defaultDirectory;
 
-            // On Linux with mono, this needs to be true or symbolic links are ignored
-            EnableSeparateFileAndDirectoryQueries = enableSeparateFileAndDirectoryQueries;
+            // On Linux, this needs to be true or symbolic links are ignored
+            // TODO: See if still needed under .NET Core
+            EnableSeparateFileAndDirectoryQueries = environmentInfo.OperatingSystem != MediaBrowser.Model.System.OperatingSystem.Windows &&
+                environmentInfo.OperatingSystem != MediaBrowser.Model.System.OperatingSystem.OSX;
 
             SetInvalidFileNameChars(environmentInfo.OperatingSystem == MediaBrowser.Model.System.OperatingSystem.Windows);
 

@@ -59,9 +59,9 @@ namespace MediaBrowser.Api
     [Authenticated(Roles = "Admin", AllowBeforeStartupWizard = true)]
     public class UpdateMediaEncoderPath : IReturnVoid
     {
-        [ApiMember(Name = "Path", Description = "Path", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
+        [ApiMember(Name = "Path", Description = "Path", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string Path { get; set; }
-        [ApiMember(Name = "PathType", Description = "PathType", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
+        [ApiMember(Name = "PathType", Description = "PathType", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string PathType { get; set; }
     }
 

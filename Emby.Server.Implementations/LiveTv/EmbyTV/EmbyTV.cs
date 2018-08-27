@@ -800,7 +800,7 @@ namespace Emby.Server.Implementations.LiveTv.EmbyTV
             existingTimer.Tags = updatedTimer.Tags;
             existingTimer.IsProgramSeries = updatedTimer.IsProgramSeries;
             existingTimer.IsRepeat = updatedTimer.IsRepeat;
-            existingTimer.IsNew = updatedTimer.IsNew;
+            existingTimer.IsSports = updatedTimer.IsSports;
             existingTimer.Name = updatedTimer.Name;
             existingTimer.OfficialRating = updatedTimer.OfficialRating;
             existingTimer.OriginalAirDate = updatedTimer.OriginalAirDate;
@@ -898,8 +898,7 @@ namespace Emby.Server.Implementations.LiveTv.EmbyTV
             {
                 defaults.SeriesId = program.SeriesId;
                 defaults.ProgramId = program.Id;
-                defaults.RecordNewOnly = program.IsNew;
-                defaults.Name = program.Name;
+                defaults.RecordNewOnly = !program.IsRepeat;
             }
 
             defaults.SkipEpisodesInLibrary = defaults.RecordNewOnly;
@@ -2420,7 +2419,7 @@ namespace Emby.Server.Implementations.LiveTv.EmbyTV
             //    return true;
             //}
 
-            if (seriesTimer.RecordNewOnly && !timer.IsNew)
+            if (seriesTimer.RecordNewOnly && timer.IsRepeat)
             {
                 return true;
             }
@@ -2720,7 +2719,6 @@ namespace Emby.Server.Implementations.LiveTv.EmbyTV
             timerInfo.Overview = programInfo.Overview;
             timerInfo.OfficialRating = programInfo.OfficialRating;
             timerInfo.IsRepeat = programInfo.IsRepeat;
-            timerInfo.IsNew = programInfo.IsNew;
             timerInfo.SeriesId = programInfo.ExternalSeriesId;
             timerInfo.ProviderIds = programInfo.ProviderIds;
             timerInfo.Tags = programInfo.Tags;

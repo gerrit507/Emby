@@ -10,12 +10,11 @@ using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Serialization;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using MediaBrowser.Model.Dto;
-using System;
-using MediaBrowser.Controller.Providers;
 
 namespace MediaBrowser.Providers.MediaInfo
 {
@@ -26,50 +25,35 @@ namespace MediaBrowser.Providers.MediaInfo
         private readonly IApplicationPaths _appPaths;
         private readonly IJsonSerializer _json;
         private readonly ILibraryManager _libraryManager;
-        private readonly IMediaSourceManager _mediaSourceManager;
 
         private readonly CultureInfo _usCulture = new CultureInfo("en-US");
 
-        public FFProbeAudioInfo(IMediaSourceManager mediaSourceManager, IMediaEncoder mediaEncoder, IItemRepository itemRepo, IApplicationPaths appPaths, IJsonSerializer json, ILibraryManager libraryManager)
+        public FFProbeAudioInfo(IMediaEncoder mediaEncoder, IItemRepository itemRepo, IApplicationPaths appPaths, IJsonSerializer json, ILibraryManager libraryManager)
         {
             _mediaEncoder = mediaEncoder;
             _itemRepo = itemRepo;
             _appPaths = appPaths;
             _json = json;
             _libraryManager = libraryManager;
-            _mediaSourceManager = mediaSourceManager;
         }
 
-        public async Task<ItemUpdateType> Probe<T>(T item, MetadataRefreshOptions options,
-            CancellationToken cancellationToken)
+        public async Task<ItemUpdateType> Probe<T>(T item, CancellationToken cancellationToken)
             where T : Audio
         {
-            var path = item.Path;
-            var protocol = item.PathProtocol ?? MediaProtocol.File;
-
-            if (!item.IsShortcut || options.EnableRemoteContentProbe)
+            var result = await _mediaEncoder.GetMediaInfo(new MediaInfoRequest
             {
-                if (item.IsShortcut)
+                MediaType = DlnaProfileType.Audio,
+                MediaSource = new MediaSourceInfo
                 {
-                    path = item.ShortcutPath;
-                    protocol = _mediaSourceManager.GetPathProtocol(path);
+                    Path = item.Path,
+                    Protocol = MediaProtocol.File
                 }
 
-                var result = await _mediaEncoder.GetMediaInfo(new MediaInfoRequest
-                {
-                    MediaType = DlnaProfileType.Audio,
-                    MediaSource = new MediaSourceInfo
-                    {
-                        Path = path,
-                        Protocol = protocol
-                    }
+            }, cancellationToken).ConfigureAwait(false);
 
-                }, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
 
-                cancellationToken.ThrowIfCancellationRequested();
-
-                Fetch(item, cancellationToken, result);
-            }
+            Fetch(item, cancellationToken, result);
 
             return ItemUpdateType.MetadataImport;
         }

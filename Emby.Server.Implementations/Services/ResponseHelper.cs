@@ -93,6 +93,13 @@ namespace Emby.Server.Implementations.Services
                 return asyncStreamWriter.WriteToAsync(response.OutputStream, cancellationToken);
             }
 
+            var streamWriter = result as IStreamWriter;
+            if (streamWriter != null)
+            {
+                streamWriter.WriteTo(response.OutputStream);
+                return Task.CompletedTask;
+            }
+
             var fileWriter = result as FileWriter;
             if (fileWriter != null)
             {
@@ -127,13 +134,6 @@ namespace Emby.Server.Implementations.Services
                 {
                     return response.OutputStream.WriteAsync(bytes, 0, bytes.Length, cancellationToken);
                 }
-                return Task.CompletedTask;
-            }
-
-            var streamWriter = result as IStreamWriter;
-            if (streamWriter != null)
-            {
-                streamWriter.WriteTo(response.OutputStream);
                 return Task.CompletedTask;
             }
 

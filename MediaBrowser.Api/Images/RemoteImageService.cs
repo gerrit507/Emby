@@ -73,13 +73,13 @@ namespace MediaBrowser.Api.Images
 
     public class BaseDownloadRemoteImage : IReturnVoid
     {
-        [ApiMember(Name = "Type", Description = "The image type", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "GET,POST")]
+        [ApiMember(Name = "Type", Description = "The image type", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "GET")]
         public ImageType Type { get; set; }
 
-        [ApiMember(Name = "ProviderName", Description = "The image provider", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET,POST")]
+        [ApiMember(Name = "ProviderName", Description = "The image provider", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
         public string ProviderName { get; set; }
 
-        [ApiMember(Name = "ImageUrl", Description = "The image url", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET,POST")]
+        [ApiMember(Name = "ImageUrl", Description = "The image url", IsRequired = false, DataType = "string", ParameterType = "query", Verb = "GET")]
         public string ImageUrl { get; set; }
     }
 
@@ -91,7 +91,7 @@ namespace MediaBrowser.Api.Images
         /// Gets or sets the id.
         /// </summary>
         /// <value>The id.</value>
-        [ApiMember(Name = "Id", Description = "Item Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "POST")]
+        [ApiMember(Name = "Id", Description = "Item Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "GET")]
         public string Id { get; set; }
     }
 

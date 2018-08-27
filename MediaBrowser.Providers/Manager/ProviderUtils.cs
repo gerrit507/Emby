@@ -283,9 +283,15 @@ namespace MediaBrowser.Providers.Manager
 
         private static void MergeTrailers(BaseItem source, BaseItem target, MetadataFields[] lockedFields, bool replaceData)
         {
-            if (replaceData || target.RemoteTrailers.Length == 0)
+            var sourceCast = source as IHasTrailers;
+            var targetCast = target as IHasTrailers;
+
+            if (sourceCast != null && targetCast != null)
             {
-                target.RemoteTrailers = source.RemoteTrailers;
+                if (replaceData || targetCast.RemoteTrailers.Length == 0)
+                {
+                    targetCast.RemoteTrailers = sourceCast.RemoteTrailers;
+                }
             }
         }
 

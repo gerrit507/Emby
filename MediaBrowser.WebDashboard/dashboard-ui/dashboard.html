@@ -21,13 +21,13 @@
                             <i class="md-icon" style="background-color: #52B54B; border-radius: .25em; color: #fff; margin-right: .5em; padding: .25em; font-size: 110%;">check</i>
                             ${ServerUpToDate}
                         </p>
-                        <div id="pUpdateNow" class="hide">
+                        <div id="pUpdateNow" style="display: none;">
                             <p>
                                 <strong>${NewServerVersionAvailable}</strong>
                             </p>
                             <p id="newVersionNumber"></p>
                             <div id="btnUpdateApplicationContainer">
-                                <button id="btnUpdateApplication" is="emby-button" type="button" class="raised block" onclick="DashboardPage.updateApplication(this);">
+                                <button id="btnUpdateApplication" is="emby-button" type="button" class="raised block" onclick="DashboardPage.updateApplication();">
                                     <span>${ButtonUpdateNow}</span>
                                 </button>
                             </div>
@@ -45,11 +45,11 @@
                         </p>
                     </div>
 
-                    <div style="margin-top:1em;">
-                        <button is="emby-button" type="button" id="btnRestartServer" class="raised hide" onclick="DashboardPage.restart(this);" style="margin-left:0;">
+                    <div>
+                        <button is="emby-button" type="button" class="raised btnRestartContainer hide" onclick="DashboardPage.restart();" style="margin-left:0;">
                             <span>${ButtonRestart}</span>
                         </button>
-                        <button is="emby-button" type="button" id="btnShutdown" class="raised" onclick="DashboardPage.shutdown(this);">
+                        <button is="emby-button" type="button" id="btnShutdown" class="raised" onclick="DashboardPage.shutdown();">
                             <span>${ButtonShutdown}</span>
                         </button>
                     </div>
@@ -77,11 +77,7 @@
                 </div>
 
                 <div class="dashboardSection" style="padding-left: 0;">
-                    <a is="emby-linkbutton" href="devices/devices.html" style="margin-left:.8em!important;" class="button-flat sectionTitleTextButton">
-                        <h3 style="margin:0;">${HeaderActiveDevices}</h3>
-                        <i class="md-icon">&#xE5CC;</i>
-                    </a>
-
+                    <h3>${HeaderActiveDevices}</h3>
                     <div class="activeDevices itemsContainer vertical-wrap">
                     </div>
 
@@ -90,11 +86,8 @@
 
             <div class="dashboardColumn dashboardColumn-2-40 dashboardColumn-3-27">
                 <div class="dashboardSection">
-                    <a is="emby-linkbutton" href="serveractivity.html?useractivity=true" class="button-flat sectionTitleTextButton">
-                        <h3>${HeaderActivity}</h3>
-                        <i class="md-icon">&#xE5CC;</i>
-                    </a>
-                    <div class="paperList userActivityItems" data-activitylimit="7" data-useractivity="true">
+                    <h3>${HeaderRecentActivity}</h3>
+                    <div class="paperList activityItems">
                     </div>
                 </div>
             </div>
@@ -103,16 +96,6 @@
                 <div class="dashboardSection activeRecordingsSection hide">
                     <h3>${HeaderActiveRecordings}</h3>
                     <div class="activeRecordingItems vertical-wrap" is="emby-itemscontainer">
-                    </div>
-                </div>
-
-                <div class="dashboardSection serverActivitySection hide activityContainer">
-
-                    <a is="emby-linkbutton" href="serveractivity.html?useractivity=false" class="button-flat sectionTitleTextButton">
-                        <h3>${Alerts}</h3>
-                        <i class="md-icon">&#xE5CC;</i>
-                    </a>
-                    <div class="paperList serverActivityItems" data-activitylimit="4" data-useractivity="false">
                     </div>
                 </div>
 

@@ -305,14 +305,19 @@ namespace MediaBrowser.Providers.Movies
             //    movie.Keywords = movieData.keywords.keywords.Select(i => i.name).ToList();
             //}
 
-            if (movieData.trailers != null && movieData.trailers.youtube != null)
+            if (movieData.trailers != null && movieData.trailers.youtube != null &&
+                movieData.trailers.youtube.Count > 0)
             {
-                movie.RemoteTrailers = movieData.trailers.youtube.Select(i => new MediaUrl
+                var hasTrailers = movie as IHasTrailers;
+                if (hasTrailers != null)
                 {
-                    Url = string.Format("https://www.youtube.com/watch?v={0}", i.source),
-                    Name = i.name
+                    hasTrailers.RemoteTrailers = movieData.trailers.youtube.Select(i => new MediaUrl
+                    {
+                        Url = string.Format("https://www.youtube.com/watch?v={0}", i.source),
+                        Name = i.name
 
-                }).ToArray();
+                    }).ToArray();
+                }
             }
         }
 

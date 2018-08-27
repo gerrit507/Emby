@@ -197,9 +197,9 @@ namespace MediaBrowser.Providers.MediaInfo
                 .Trim();
         }
 
-        private void FetchShortcutInfo(BaseItem item)
+        private void FetchShortcutInfo(Video video)
         {
-            item.ShortcutPath = _fileSystem.ReadAllLines(item.Path)
+            video.ShortcutPath = _fileSystem.ReadAllLines(video.Path)
                 .Select(NormalizeStrmLine)
                 .FirstOrDefault(i => !string.IsNullOrWhiteSpace(i) && !i.StartsWith("#", StringComparison.OrdinalIgnoreCase));
         }
@@ -207,24 +207,9 @@ namespace MediaBrowser.Providers.MediaInfo
         public Task<ItemUpdateType> FetchAudioInfo<T>(T item, CancellationToken cancellationToken)
             where T : Audio
         {
-            if (item.IsVirtualItem)
-            {
-                return _cachedTask;
-            }
+            var prober = new FFProbeAudioInfo(_mediaEncoder, _itemRepo, _appPaths, _json, _libraryManager);
 
-            if (!options.EnableRemoteContentProbe && !item.IsFileProtocol)
-            {
-                return _cachedTask;
-            }
-
-            if (item.IsShortcut)
-            {
-                FetchShortcutInfo(item);
-            }
-
-            var prober = new FFProbeAudioInfo(_mediaSourceManager, _mediaEncoder, _itemRepo, _appPaths, _json, _libraryManager);
-
-            return prober.Probe(item, options, cancellationToken);
+            return prober.Probe(item, cancellationToken);
         }
 
         public int Order

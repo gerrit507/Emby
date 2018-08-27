@@ -19,6 +19,22 @@ using MediaBrowser.Model.Services;
 
 namespace MediaBrowser.Api.Movies
 {
+    /// <summary>
+    /// Class GetSimilarMovies
+    /// </summary>
+    [Route("/Movies/{Id}/Similar", "GET", Summary = "Finds movies and trailers similar to a given movie.")]
+    public class GetSimilarMovies : BaseGetSimilarItemsFromItem
+    {
+    }
+
+    /// <summary>
+    /// Class GetSimilarTrailers
+    /// </summary>
+    [Route("/Trailers/{Id}/Similar", "GET", Summary = "Finds movies and trailers similar to a given trailer.")]
+    public class GetSimilarTrailers : BaseGetSimilarItemsFromItem
+    {
+    }
+
     [Route("/Movies/Recommendations", "GET", Summary = "Gets movie recommendations")]
     public class GetMovieRecommendations : IReturn<RecommendationDto[]>, IHasDtoOptions
     {
@@ -92,6 +108,25 @@ namespace MediaBrowser.Api.Movies
             _authContext = authContext;
         }
 
+        /// <summary>
+        /// Gets the specified request.
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <returns>System.Object.</returns>
+        public object Get(GetSimilarMovies request)
+        {
+            var result = GetSimilarItemsResult(request);
+
+            return ToOptimizedSerializedResultUsingCache(result);
+        }
+
+        public object Get(GetSimilarTrailers request)
+        {
+            var result = GetSimilarItemsResult(request);
+
+            return ToOptimizedSerializedResultUsingCache(result);
+        }
+
         public object Get(GetMovieRecommendations request)
         {
             var user = _userManager.GetUserById(request.UserId);
@@ -103,7 +138,7 @@ namespace MediaBrowser.Api.Movies
             return ToOptimizedResult(result);
         }
 
-        public QueryResult<BaseItemDto> GetSimilarItemsResult(BaseGetSimilarItemsFromItem request)
+        private QueryResult<BaseItemDto> GetSimilarItemsResult(BaseGetSimilarItemsFromItem request)
         {
             var user = !string.IsNullOrWhiteSpace(request.UserId) ? _userManager.GetUserById(request.UserId) : null;
 

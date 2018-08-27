@@ -3,6 +3,7 @@ using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Connect;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Net;
+using MediaBrowser.Model.Configuration;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,34 +14,39 @@ using System.Threading;
 
 namespace MediaBrowser.Api
 {
-    [Route("/Startup/Complete", "POST", Summary = "Reports that the startup wizard has been completed", IsHidden = true)]
+    [Route("/Startup/Complete", "POST", Summary = "Reports that the startup wizard has been completed")]
     public class ReportStartupWizardComplete : IReturnVoid
     {
     }
 
-    [Route("/Startup/Configuration", "GET", Summary = "Gets initial server configuration", IsHidden = true)]
+    [Route("/Startup/Info", "GET", Summary = "Gets initial server info")]
+    public class GetStartupInfo : IReturn<StartupInfo>
+    {
+    }
+
+    [Route("/Startup/Configuration", "GET", Summary = "Gets initial server configuration")]
     public class GetStartupConfiguration : IReturn<StartupConfiguration>
     {
     }
 
-    [Route("/Startup/Configuration", "POST", Summary = "Updates initial server configuration", IsHidden = true)]
+    [Route("/Startup/Configuration", "POST", Summary = "Updates initial server configuration")]
     public class UpdateStartupConfiguration : StartupConfiguration, IReturnVoid
     {
     }
 
-    [Route("/Startup/RemoteAccess", "POST", Summary = "Updates initial server configuration", IsHidden = true)]
+    [Route("/Startup/RemoteAccess", "POST", Summary = "Updates initial server configuration")]
     public class UpdateRemoteAccessConfiguration : IReturnVoid
     {
         public bool EnableRemoteAccess { get; set; }
         public bool EnableAutomaticPortMapping { get; set; }
     }
 
-    [Route("/Startup/User", "GET", Summary = "Gets initial user info", IsHidden = true)]
+    [Route("/Startup/User", "GET", Summary = "Gets initial user info")]
     public class GetStartupUser : IReturn<StartupUser>
     {
     }
 
-    [Route("/Startup/User", "POST", Summary = "Updates initial user info", IsHidden = true)]
+    [Route("/Startup/User", "POST", Summary = "Updates initial user info")]
     public class UpdateStartupUser : StartupUser, IReturn<UpdateStartupUserResult>
     {
     }
@@ -99,6 +105,14 @@ namespace MediaBrowser.Api
             {
 
             }
+        }
+
+        public object Get(GetStartupInfo request)
+        {
+            return new StartupInfo
+            {
+                HasMediaEncoder = !string.IsNullOrWhiteSpace(_mediaEncoder.EncoderPath)
+            };
         }
 
         public object Get(GetStartupConfiguration request)
@@ -167,6 +181,11 @@ namespace MediaBrowser.Api
         public string UICulture { get; set; }
         public string MetadataCountryCode { get; set; }
         public string PreferredMetadataLanguage { get; set; }
+    }
+
+    public class StartupInfo
+    {
+        public bool HasMediaEncoder { get; set; }
     }
 
     public class StartupUser

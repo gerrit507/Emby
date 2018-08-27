@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using MediaBrowser.Model.Net;
 using MediaBrowser.Model.Threading;
 using Rssdp;
-using System.Globalization;
 
 namespace Rssdp.Infrastructure
 {
@@ -42,12 +41,18 @@ namespace Rssdp.Infrastructure
 
         private const string ServerVersion = "1.0";
 
-        private Func<int> _deviceCacheSecondsFn;
+        #endregion
+
+        #region Message Format Constants
+
+        #endregion
+
+        #region Constructors
 
         /// <summary>
         /// Default constructor.
         /// </summary>
-        public SsdpDevicePublisher(ISsdpCommunicationsServer communicationsServer, ITimerFactory timerFactory, string osName, string osVersion, Func<int> deviceCacheSeconds)
+        public SsdpDevicePublisher(ISsdpCommunicationsServer communicationsServer, ITimerFactory timerFactory, string osName, string osVersion)
         {
             if (communicationsServer == null) throw new ArgumentNullException("communicationsServer");
             if (osName == null) throw new ArgumentNullException("osName");
@@ -66,7 +71,6 @@ namespace Rssdp.Infrastructure
             _CommsServer.RequestReceived += CommsServer_RequestReceived;
             _OSName = osName;
             _OSVersion = osVersion;
-            _deviceCacheSecondsFn = deviceCacheSeconds;
 
             _CommsServer.BeginListeningForBroadcasts();
         }
@@ -93,12 +97,27 @@ namespace Rssdp.Infrastructure
 
             ThrowIfDisposed();
 
+            TimeSpan minCacheTime = TimeSpan.Zero;
+            bool wasAdded = false;
             lock (_Devices)
             {
                 if (!_Devices.Contains(device))
                 {
                     _Devices.Add(device);
+                    wasAdded = true;
+                    minCacheTime = GetMinimumNonZeroCacheLifetime();
                 }
+            }
+
+            if (wasAdded)
+            {
+                //_MinCacheTime = minCacheTime;
+
+                WriteTrace("Device Added", device);
+
+                SetRebroadcastAliveNotificationsTimer(minCacheTime);
+
+                SendAliveNotifications(device, true, CancellationToken.None);
             }
         }
 
@@ -116,12 +135,14 @@ namespace Rssdp.Infrastructure
             if (device == null) throw new ArgumentNullException("device");
 
             bool wasRemoved = false;
+            TimeSpan minCacheTime = TimeSpan.Zero;
             lock (_Devices)
             {
                 if (_Devices.Contains(device))
                 {
                     _Devices.Remove(device);
                     wasRemoved = true;
+                    minCacheTime = GetMinimumNonZeroCacheLifetime();
                 }
             }
 
@@ -151,6 +172,26 @@ namespace Rssdp.Infrastructure
                 return _ReadOnlyDevices;
             }
         }
+
+        /// <summary>
+        /// If true (default) treats root devices as both upnp:rootdevice and pnp:rootdevice types.
+        /// </summary>
+        /// <remarks>
+        /// <para>Enabling this option will cause devices to show up in Microsoft Windows Explorer's network screens (if discovery is enabled etc.). Windows Explorer appears to search only for pnp:rootdeivce and not upnp:rootdevice.</para>
+        /// <para>If false, the system will only use upnp:rootdevice for notifiation broadcasts and and search responses, which is correct according to the UPnP/SSDP spec.</para>
+        /// </remarks>
+        public bool SupportPnpRootDevice
+        {
+            get { return _SupportPnpRootDevice; }
+            set
+            {
+                _SupportPnpRootDevice = value;
+            }
+        }
+
+        #endregion
+
+        #region Overrides
 
         /// <summary>
         /// Stops listening for requests, stops sending periodic broadcasts, disposes all internal resources.
@@ -231,7 +272,7 @@ namespace Rssdp.Infrastructure
                 {
                     if (String.Compare(SsdpConstants.SsdpDiscoverAllSTHeader, searchTarget, StringComparison.OrdinalIgnoreCase) == 0)
                         devices = GetAllDevicesAsFlatEnumerable().ToArray();
-                    else if (String.Compare(SsdpConstants.UpnpDeviceTypeRootDevice, searchTarget, StringComparison.OrdinalIgnoreCase) == 0)
+                    else if (String.Compare(SsdpConstants.UpnpDeviceTypeRootDevice, searchTarget, StringComparison.OrdinalIgnoreCase) == 0 || (this.SupportPnpRootDevice && String.Compare(SsdpConstants.PnpDeviceTypeRootDevice, searchTarget, StringComparison.OrdinalIgnoreCase) == 0))
                         devices = _Devices.ToArray();
                     else if (searchTarget.Trim().StartsWith("uuid:", StringComparison.OrdinalIgnoreCase))
                         devices = (from device in GetAllDevicesAsFlatEnumerable() where String.Compare(device.Uuid, searchTarget.Substring(5), StringComparison.OrdinalIgnoreCase) == 0 select device).ToArray();
@@ -267,6 +308,8 @@ namespace Rssdp.Infrastructure
             if (isRootDevice)
             {
                 SendSearchResponse(SsdpConstants.UpnpDeviceTypeRootDevice, device, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), endPoint, receivedOnlocalIpAddress, cancellationToken);
+                if (this.SupportPnpRootDevice)
+                    SendSearchResponse(SsdpConstants.PnpDeviceTypeRootDevice, device, GetUsn(device.Udn, SsdpConstants.PnpDeviceTypeRootDevice), endPoint, receivedOnlocalIpAddress, cancellationToken);
             }
 
             SendSearchResponse(device.Udn, device, device.Udn, endPoint, receivedOnlocalIpAddress, cancellationToken);
@@ -291,7 +334,7 @@ namespace Rssdp.Infrastructure
 
             values["EXT"] = "";
             values["DATE"] = DateTime.UtcNow.ToString("r");
-            values["CACHE-CONTROL"] = "max-age = " + _deviceCacheSecondsFn().ToString(CultureInfo.InvariantCulture);
+            values["CACHE-CONTROL"] = "max-age = 600";
             values["ST"] = searchTarget;
             values["SERVER"] = string.Format("{0}/{1} UPnP/1.0 RSSDP/{2}", _OSName, _OSVersion, ServerVersion);
             values["USN"] = uniqueServiceName;
@@ -360,7 +403,9 @@ namespace Rssdp.Infrastructure
             {
                 if (IsDisposed) return;
 
-                WriteTrace("Begin Sending Alive Notifications For All Devices");
+                //DisposeRebroadcastTimer();
+
+                //WriteTrace("Begin Sending Alive Notifications For All Devices");
 
                 _LastNotificationTime = DateTime.Now;
 
@@ -377,7 +422,7 @@ namespace Rssdp.Infrastructure
                     SendAliveNotifications(device, true, CancellationToken.None);
                 }
 
-                WriteTrace("Completed Sending Alive Notifications For All Devices");
+                //WriteTrace("Completed Sending Alive Notifications For All Devices");
             }
             catch (ObjectDisposedException ex)
             {
@@ -397,6 +442,8 @@ namespace Rssdp.Infrastructure
             if (isRoot)
             {
                 SendAliveNotification(device, SsdpConstants.UpnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), cancellationToken);
+                if (this.SupportPnpRootDevice)
+                    SendAliveNotification(device, SsdpConstants.PnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.PnpDeviceTypeRootDevice), cancellationToken);
             }
 
             SendAliveNotification(device, device.Udn, device.Udn, cancellationToken);
@@ -419,7 +466,7 @@ namespace Rssdp.Infrastructure
             // If needed later for non-server devices, these headers will need to be dynamic 
             values["HOST"] = "239.255.255.250:1900";
             values["DATE"] = DateTime.UtcNow.ToString("r");
-            values["CACHE-CONTROL"] = "max-age = " + _deviceCacheSecondsFn().ToString(CultureInfo.InvariantCulture);
+            values["CACHE-CONTROL"] = "max-age = " + rootDevice.CacheLifetime.TotalSeconds;
             values["LOCATION"] = rootDevice.Location.ToString();
             values["SERVER"] = string.Format("{0}/{1} UPnP/1.0 RSSDP/{2}", _OSName, _OSVersion, ServerVersion);
             values["NTS"] = "ssdp:alive";
@@ -430,7 +477,7 @@ namespace Rssdp.Infrastructure
 
             _CommsServer.SendMulticastMessage(message, cancellationToken);
 
-            WriteTrace(String.Format("Sent alive notification"), device);
+            //WriteTrace(String.Format("Sent alive notification"), device);
         }
 
         #endregion
@@ -443,6 +490,8 @@ namespace Rssdp.Infrastructure
             if (isRoot)
             {
                 tasks.Add(SendByeByeNotification(device, SsdpConstants.UpnpDeviceTypeRootDevice, GetUsn(device.Udn, SsdpConstants.UpnpDeviceTypeRootDevice), cancellationToken));
+                if (this.SupportPnpRootDevice)
+                    tasks.Add(SendByeByeNotification(device, "pnp:rootdevice", GetUsn(device.Udn, "pnp:rootdevice"), cancellationToken));
             }
 
             tasks.Add(SendByeByeNotification(device, device.Udn, device.Udn, cancellationToken));
@@ -489,6 +538,62 @@ namespace Rssdp.Infrastructure
             if (timer != null)
                 timer.Dispose();
         }
+
+        private void SetRebroadcastAliveNotificationsTimer(TimeSpan minCacheTime)
+        {
+            //if (minCacheTime == _RebroadcastAliveNotificationsTimeSpan) return;
+
+            DisposeRebroadcastTimer();
+
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (minCacheTime == TimeSpan.Zero) return;
+
+            // According to UPnP/SSDP spec, we should randomise the interval at 
+            // which we broadcast notifications, to help with network congestion.
+            // Specs also advise to choose a random interval up to *half* the cache time.
+            // Here we do that, but using the minimum non-zero cache time of any device we are publishing.
+            var rebroadCastInterval = new TimeSpan(minCacheTime.Ticks);
+
+            // If we were already setup to rebroadcast someime in the future,
+            // don't just blindly reset the next broadcast time to the new interval
+            // as repeatedly changing the interval might end up causing us to over
+            // delay in sending the next one.
+            var nextBroadcastInterval = rebroadCastInterval;
+            if (_LastNotificationTime != DateTime.MinValue)
+            {
+                nextBroadcastInterval = rebroadCastInterval.Subtract(DateTime.Now.Subtract(_LastNotificationTime));
+                if (nextBroadcastInterval.Ticks < 0)
+                    nextBroadcastInterval = TimeSpan.Zero;
+                else if (nextBroadcastInterval > rebroadCastInterval)
+                    nextBroadcastInterval = rebroadCastInterval;
+            }
+
+            //_RebroadcastAliveNotificationsTimeSpan = rebroadCastInterval;
+            _RebroadcastAliveNotificationsTimer = _timerFactory.Create(SendAllAliveNotifications, null, nextBroadcastInterval, rebroadCastInterval);
+
+            //WriteTrace(String.Format("Rebroadcast Interval = {0}, Next Broadcast At = {1}", rebroadCastInterval.ToString(), nextBroadcastInterval.ToString()));
+        }
+
+        private TimeSpan GetMinimumNonZeroCacheLifetime()
+        {
+            var nonzeroCacheLifetimesQuery = (from device
+                                                                                in _Devices
+                                              where device.CacheLifetime != TimeSpan.Zero
+                                              select device.CacheLifetime).ToList();
+
+            if (nonzeroCacheLifetimesQuery.Any())
+                return nonzeroCacheLifetimesQuery.Min();
+            else
+                return TimeSpan.Zero;
+        }
+
+        #endregion
+
+        #endregion
 
         private string GetFirstHeaderValue(System.Net.Http.Headers.HttpRequestHeaders httpRequestHeaders, string headerName)
         {

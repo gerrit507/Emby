@@ -26,7 +26,7 @@ using Emby.Server.Implementations.LiveTv;
 using Emby.Server.Implementations.Localization;
 using Emby.Server.Implementations.MediaEncoder;
 using Emby.Server.Implementations.Net;
-using Emby.Notifications;
+using Emby.Server.Implementations.Notifications;
 using Emby.Server.Implementations.Playlists;
 using Emby.Server.Implementations.Reflection;
 using Emby.Server.Implementations.ScheduledTasks;
@@ -73,6 +73,7 @@ using MediaBrowser.Controller.Security;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Sorting;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.Sync;
 using MediaBrowser.Controller.TV;
 using MediaBrowser.LocalMetadata.Savers;
 using MediaBrowser.MediaEncoding.BdInfo;
@@ -233,6 +234,12 @@ namespace Emby.Server.Implementations
         protected readonly List<IDisposable> DisposableParts = new List<IDisposable>();
 
         /// <summary>
+        /// Gets a value indicating whether this instance is first run.
+        /// </summary>
+        /// <value><c>true</c> if this instance is first run; otherwise, <c>false</c>.</value>
+        public bool IsFirstRun { get; private set; }
+
+        /// <summary>
         /// Gets the configuration manager.
         /// </summary>
         /// <value>The configuration manager.</value>
@@ -341,7 +348,7 @@ namespace Emby.Server.Implementations
 
         private IEncodingManager EncodingManager { get; set; }
         private IChannelManager ChannelManager { get; set; }
-        protected ITextEncoding TextEncoding { get; private set; }
+        private ISyncManager SyncManager { get; set; }
 
         /// <summary>
         /// Gets or sets the user data repository.
@@ -351,6 +358,7 @@ namespace Emby.Server.Implementations
         private IUserRepository UserRepository { get; set; }
         internal IDisplayPreferencesRepository DisplayPreferencesRepository { get; set; }
         internal IItemRepository ItemRepository { get; set; }
+        private INotificationsRepository NotificationsRepository { get; set; }
 
         private INotificationManager NotificationManager { get; set; }
         private ISubtitleManager SubtitleManager { get; set; }
@@ -680,7 +688,7 @@ namespace Emby.Server.Implementations
         /// <summary>
         /// Runs the startup tasks.
         /// </summary>
-        public void RunStartupTasks()
+        public async Task RunStartupTasks()
         {
             Resolve<ITaskManager>().AddTasks(GetExports<IScheduledTask>(false));
 
@@ -688,7 +696,7 @@ namespace Emby.Server.Implementations
 
             ConfigurationManager.ConfigurationUpdated += OnConfigurationUpdated;
 
-            MediaEncoder.Init();
+            await MediaEncoder.Init().ConfigureAwait(false);
 
             //if (string.IsNullOrWhiteSpace(MediaEncoder.EncoderPath))
             //{
@@ -776,6 +784,8 @@ namespace Emby.Server.Implementations
             OnLoggerLoaded(true);
             LogManager.LoggerLoaded += (s, e) => OnLoggerLoaded(false);
 
+            IsFirstRun = !ConfigurationManager.CommonConfiguration.IsStartupWizardCompleted;
+
             LogManager.LogSeverity = ConfigurationManager.CommonConfiguration.EnableDebugLevelLogging
                 ? LogSeverity.Debug
                 : LogSeverity.Info;
@@ -814,6 +824,7 @@ namespace Emby.Server.Implementations
         }
 
         protected abstract IConnectManager CreateConnectManager();
+        protected abstract ISyncManager CreateSyncManager();
 
         protected virtual IHttpClient CreateHttpClient()
         {
@@ -898,7 +909,7 @@ namespace Emby.Server.Implementations
 
             RegisterSingleInstance<IXmlReaderSettingsFactory>(new XmlReaderSettingsFactory());
 
-            UserDataManager = new UserDataManager(LogManager, ServerConfigurationManager, ()=> UserManager);
+            UserDataManager = new UserDataManager(LogManager, ServerConfigurationManager);
             RegisterSingleInstance(UserDataManager);
 
             UserRepository = GetUserRepository();
@@ -949,29 +960,26 @@ namespace Emby.Server.Implementations
             TVSeriesManager = new TVSeriesManager(UserManager, UserDataManager, LibraryManager, ServerConfigurationManager);
             RegisterSingleInstance(TVSeriesManager);
 
+            SyncManager = CreateSyncManager();
+            RegisterSingleInstance(SyncManager);
+
+            DtoService = new DtoService(LogManager.GetLogger("DtoService"), LibraryManager, UserDataManager, ItemRepository, ImageProcessor, ServerConfigurationManager, FileSystemManager, ProviderManager, () => ChannelManager, SyncManager, this, () => DeviceManager, () => MediaSourceManager, () => LiveTvManager);
+            RegisterSingleInstance(DtoService);
+
             var encryptionManager = new EncryptionManager();
             RegisterSingleInstance<IEncryptionManager>(encryptionManager);
 
             ConnectManager = CreateConnectManager();
             RegisterSingleInstance(ConnectManager);
 
-            DeviceManager = new DeviceManager(AuthenticationRepository, JsonSerializer, LibraryManager, LocalizationManager, UserManager, FileSystemManager, LibraryMonitor, ServerConfigurationManager, LogManager.GetLogger("DeviceManager"), NetworkManager);
+            var deviceRepo = new SqliteDeviceRepository(LogManager.GetLogger("DeviceManager"), ServerConfigurationManager, FileSystemManager, JsonSerializer);
+            deviceRepo.Initialize();
+            DeviceManager = new DeviceManager(deviceRepo, LibraryManager, LocalizationManager, UserManager, FileSystemManager, LibraryMonitor, ServerConfigurationManager, LogManager.GetLogger("DeviceManager"), NetworkManager);
+            RegisterSingleInstance<IDeviceRepository>(deviceRepo);
             RegisterSingleInstance(DeviceManager);
 
             var newsService = new Emby.Server.Implementations.News.NewsService(ApplicationPaths, JsonSerializer);
             RegisterSingleInstance<INewsService>(newsService);
-
-            MediaSourceManager = new MediaSourceManager(ItemRepository, ApplicationPaths, LocalizationManager, UserManager, LibraryManager, LogManager.GetLogger("MediaSourceManager"), JsonSerializer, FileSystemManager, UserDataManager, TimerFactory, () => MediaEncoder);
-            RegisterSingleInstance(MediaSourceManager);
-
-            SubtitleManager = new SubtitleManager(LogManager.GetLogger("SubtitleManager"), FileSystemManager, LibraryMonitor, MediaSourceManager, ServerConfigurationManager, LocalizationManager);
-            RegisterSingleInstance(SubtitleManager);
-
-            ProviderManager = new ProviderManager(HttpClient, SubtitleManager, ServerConfigurationManager, LibraryMonitor, LogManager, FileSystemManager, ApplicationPaths, () => LibraryManager, JsonSerializer);
-            RegisterSingleInstance(ProviderManager);
-
-            DtoService = new DtoService(LogManager.GetLogger("DtoService"), LibraryManager, UserDataManager, ItemRepository, ImageProcessor, ServerConfigurationManager, FileSystemManager, ProviderManager, () => ChannelManager, this, () => DeviceManager, () => MediaSourceManager, () => LiveTvManager);
-            RegisterSingleInstance(DtoService);
 
             ChannelManager = new ChannelManager(UserManager, DtoService, LibraryManager, LogManager.GetLogger("ChannelManager"), ServerConfigurationManager, FileSystemManager, UserDataManager, JsonSerializer, LocalizationManager, HttpClient, ProviderManager);
             RegisterSingleInstance(ChannelManager);
@@ -994,7 +1002,7 @@ namespace Emby.Server.Implementations
             PlaylistManager = new PlaylistManager(LibraryManager, FileSystemManager, LibraryMonitor, LogManager.GetLogger("PlaylistManager"), UserManager, ProviderManager);
             RegisterSingleInstance<IPlaylistManager>(PlaylistManager);
 
-            LiveTvManager = new LiveTvManager(this, HttpClient, ServerConfigurationManager, Logger, ItemRepository, ImageProcessor, UserDataManager, DtoService, UserManager, LibraryManager, TaskManager, LocalizationManager, JsonSerializer, ProviderManager, FileSystemManager, SecurityManager, () => ChannelManager);
+            LiveTvManager = new LiveTvManager(this, ServerConfigurationManager, Logger, ItemRepository, ImageProcessor, UserDataManager, DtoService, UserManager, LibraryManager, TaskManager, LocalizationManager, JsonSerializer, ProviderManager, FileSystemManager, SecurityManager, () => ChannelManager);
             RegisterSingleInstance(LiveTvManager);
 
             UserViewManager = new UserViewManager(LibraryManager, LocalizationManager, UserManager, ChannelManager, LiveTvManager, ServerConfigurationManager);
@@ -1026,7 +1034,7 @@ namespace Emby.Server.Implementations
             RegisterSingleInstance(activityLogRepo);
             RegisterSingleInstance<IActivityManager>(new ActivityManager(LogManager.GetLogger("ActivityManager"), activityLogRepo, UserManager));
 
-            var authContext = new AuthorizationContext(AuthenticationRepository, ConnectManager, UserManager);
+            var authContext = new AuthorizationContext(AuthenticationRepository, ConnectManager);
             RegisterSingleInstance<IAuthorizationContext>(authContext);
             RegisterSingleInstance<ISessionContext>(new SessionContext(UserManager, authContext, SessionManager));
 
@@ -1042,13 +1050,14 @@ namespace Emby.Server.Implementations
 
             var userDataRepo = new SqliteUserDataRepository(LogManager.GetLogger("SqliteUserDataRepository"), ApplicationPaths, FileSystemManager);
 
+            ((UserDataManager)UserDataManager).Repository = userDataRepo;
+            itemRepo.Initialize(userDataRepo);
+            ((LibraryManager)LibraryManager).ItemRepository = ItemRepository;
+            ConfigureNotificationsRepository();
+
             SetStaticProperties();
 
             ((UserManager)UserManager).Initialize();
-
-            ((UserDataManager)UserDataManager).Repository = userDataRepo;
-            itemRepo.Initialize(userDataRepo, UserManager);
-            ((LibraryManager)LibraryManager).ItemRepository = ItemRepository;
         }
 
         public virtual string PackageRuntime
@@ -1289,10 +1298,11 @@ namespace Emby.Server.Implementations
                 ZipClient,
                 MemoryStreamFactory,
                 ProcessFactory,
+                (Environment.ProcessorCount > 2 ? 14000 : 40000),
+                EnvironmentInfo.OperatingSystem == MediaBrowser.Model.System.OperatingSystem.Windows,
                 EnvironmentInfo,
                 BlurayExaminer,
-                assemblyInfo,
-                this);
+                assemblyInfo);
 
             MediaEncoder = mediaEncoder;
             RegisterSingleInstance(MediaEncoder);
@@ -1313,7 +1323,7 @@ namespace Emby.Server.Implementations
 
         private IAuthenticationRepository GetAuthenticationRepository()
         {
-            var repo = new AuthenticationRepository(LogManager.GetLogger("AuthenticationRepository"), ServerConfigurationManager);
+            var repo = new AuthenticationRepository(LogManager.GetLogger("AuthenticationRepository"), ServerConfigurationManager.ApplicationPaths);
 
             repo.Initialize();
 
@@ -1330,6 +1340,20 @@ namespace Emby.Server.Implementations
         }
 
         /// <summary>
+        /// Configures the repositories.
+        /// </summary>
+        private void ConfigureNotificationsRepository()
+        {
+            var repo = new SqliteNotificationsRepository(LogManager.GetLogger("SqliteNotificationsRepository"), ServerConfigurationManager.ApplicationPaths, FileSystemManager);
+
+            repo.Initialize();
+
+            NotificationsRepository = repo;
+
+            RegisterSingleInstance(NotificationsRepository);
+        }
+
+        /// <summary>
         /// Dirty hacks
         /// </summary>
         private void SetStaticProperties()
@@ -1341,7 +1365,9 @@ namespace Emby.Server.Implementations
             BaseItem.ProviderManager = ProviderManager;
             BaseItem.LocalizationManager = LocalizationManager;
             BaseItem.ItemRepository = ItemRepository;
+            User.XmlSerializer = XmlSerializer;
             User.UserManager = UserManager;
+            Folder.UserManager = UserManager;
             BaseItem.FileSystem = FileSystemManager;
             BaseItem.UserDataManager = UserDataManager;
             BaseItem.ChannelManager = ChannelManager;
@@ -1765,9 +1791,6 @@ namespace Emby.Server.Implementations
             // Local metadata 
             list.Add(GetAssembly(typeof(BoxSetXmlSaver)));
 
-            // Notifications
-            list.Add(GetAssembly(typeof(NotificationManager)));
-
             // Xbmc 
             list.Add(GetAssembly(typeof(ArtistNfoProvider)));
 
@@ -1808,7 +1831,6 @@ namespace Emby.Server.Implementations
                 "mbintros.dll",
                 "embytv.dll",
                 "Messenger.dll",
-                "Messages.dll",
                 "MediaBrowser.Plugins.TvMazeProvider.dll",
                 "MBBookshelf.dll",
                 "MediaBrowser.Channels.Adult.YouJizz.dll",
@@ -1834,9 +1856,7 @@ namespace Emby.Server.Implementations
                 "MediaBrowser.Channels.HockeyStreams.dll",
                 "MediaBrowser.Plugins.ITV.dll",
                 "MediaBrowser.Plugins.Lastfm.dll",
-                "ServerRestart.dll",
-                "MediaBrowser.Plugins.NotifyMyAndroidNotifications.dll",
-                "MetadataViewer.dll"
+                "ServerRestart.dll"
             };
 
             return !exclude.Contains(filename ?? string.Empty, StringComparer.OrdinalIgnoreCase);

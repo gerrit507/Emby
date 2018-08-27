@@ -602,7 +602,7 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
 
             if (hdhomerunChannel != null && hdhomerunChannel.IsLegacyTuner)
             {
-                return new HdHomerunUdpStream(mediaSource, info, streamId, new LegacyHdHomerunChannelCommands(hdhomerunChannel.Path), modelInfo.TunerCount, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost, _socketFactory, _networkManager);
+                return new HdHomerunUdpStream(mediaSource, info, streamId, new LegacyHdHomerunChannelCommands(hdhomerunChannel.Path), modelInfo.TunerCount, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost, _socketFactory, _networkManager, _environment);
             }
 
             var enableHttpStream = true;
@@ -612,17 +612,21 @@ namespace Emby.Server.Implementations.LiveTv.TunerHosts.HdHomerun
 
                 var httpUrl = channelInfo.Path;
 
+                // Unknown
+                bool? isInterlaced = null;
+
                 // If raw was used, the tuner doesn't support params
                 if (!string.IsNullOrWhiteSpace(profile) && !string.Equals(profile, "native", StringComparison.OrdinalIgnoreCase))
                 {
                     httpUrl += "?transcode=" + profile;
+                    isInterlaced = false;
                 }
                 mediaSource.Path = httpUrl;
 
-                return new SharedHttpStream(mediaSource, info, streamId, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost);
+                return new SharedHttpStream(mediaSource, info, streamId, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost, _environment);
             }
 
-            return new HdHomerunUdpStream(mediaSource, info, streamId, new HdHomerunChannelCommands(hdhomerunChannel.Number, profile), modelInfo.TunerCount, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost, _socketFactory, _networkManager);
+            return new HdHomerunUdpStream(mediaSource, info, streamId, new HdHomerunChannelCommands(hdhomerunChannel.Number, profile), modelInfo.TunerCount, FileSystem, _httpClient, Logger, Config.ApplicationPaths, _appHost, _socketFactory, _networkManager, _environment);
         }
 
         public async Task Validate(TunerHostInfo info)

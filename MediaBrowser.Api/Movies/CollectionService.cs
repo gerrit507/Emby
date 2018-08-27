@@ -36,7 +36,7 @@ namespace MediaBrowser.Api.Movies
     [Route("/Collections/{Id}/Items", "DELETE", Summary = "Removes items from a collection")]
     public class RemoveFromCollection : IReturnVoid
     {
-        [ApiMember(Name = "Ids", Description = "Item id, comma delimited", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "DELETE")]
+        [ApiMember(Name = "Ids", Description = "Item id, comma delimited", IsRequired = true, DataType = "string", ParameterType = "query", Verb = "POST")]
         public string Ids { get; set; }
 
         [ApiMember(Name = "Id", IsRequired = true, DataType = "string", ParameterType = "path", Verb = "DELETE")]

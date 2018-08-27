@@ -373,16 +373,20 @@ namespace MediaBrowser.LocalMetadata.Savers
                 }
             }
 
-            if (item.RemoteTrailers.Length > 0)
+            var hasTrailers = item as IHasTrailers;
+            if (hasTrailers != null)
             {
-                writer.WriteStartElement("Trailers");
-
-                foreach (var trailer in item.RemoteTrailers)
+                if (hasTrailers.RemoteTrailers.Length > 0)
                 {
-                    writer.WriteElementString("Trailer", trailer.Url);
-                }
+                    writer.WriteStartElement("Trailers");
 
-                writer.WriteEndElement();
+                    foreach (var trailer in hasTrailers.RemoteTrailers)
+                    {
+                        writer.WriteElementString("Trailer", trailer.Url);
+                    }
+
+                    writer.WriteEndElement();
+                }
             }
 
             if (item.ProductionLocations.Length > 0)

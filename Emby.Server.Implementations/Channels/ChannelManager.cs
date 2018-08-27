@@ -543,7 +543,7 @@ namespace Emby.Server.Implementations.Channels
             return GetChannelFeaturesDto(channel, channelProvider, channelProvider.GetChannelFeatures());
         }
 
-        public bool SupportsExternalTransfer(Guid channelId)
+        public bool SupportsSync(string channelId)
         {
             if (string.IsNullOrEmpty(channelId))
             {
@@ -1206,10 +1206,15 @@ namespace Emby.Server.Implementations.Channels
             return result;
         }
 
-        internal IChannel GetChannelProvider(Guid internalChannelId)
+        internal IChannel GetChannelProvider(string internalChannelId)
         {
+            if (internalChannelId == null)
+            {
+                throw new ArgumentNullException("internalChannelId");
+            }
+
             var result = GetAllChannels()
-                .FirstOrDefault(i => internalChannelId.Equals(GetInternalChannelId(i.Name)));
+                .FirstOrDefault(i => string.Equals(GetInternalChannelId(i.Name).ToString("N"), internalChannelId, StringComparison.OrdinalIgnoreCase));
 
             if (result == null)
             {

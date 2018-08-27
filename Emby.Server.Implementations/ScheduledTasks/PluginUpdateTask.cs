@@ -16,7 +16,7 @@ namespace Emby.Server.Implementations.ScheduledTasks
     /// <summary>
     /// Plugin Update Task
     /// </summary>
-    public class PluginUpdateTask : IScheduledTask, IConfigurableScheduledTask
+    public class PluginUpdateTask : IScheduledTask
     {
         /// <summary>
         /// The _logger
@@ -71,13 +71,14 @@ namespace Emby.Server.Implementations.ScheduledTasks
 
             var numComplete = 0;
 
-            foreach (var package in packagesToInstall)
+            // Create tasks for each one
+            var tasks = packagesToInstall.Select(i => Task.Run(async () =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 try
                 {
-                    await _installationManager.InstallPackage(package, true, new SimpleProgress<double>(), cancellationToken).ConfigureAwait(false);
+                    await _installationManager.InstallPackage(i, true, new SimpleProgress<double>(), cancellationToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -89,11 +90,11 @@ namespace Emby.Server.Implementations.ScheduledTasks
                 }
                 catch (HttpException ex)
                 {
-                    _logger.ErrorException("Error downloading {0}", ex, package.name);
+                    _logger.ErrorException("Error downloading {0}", ex, i.name);
                 }
                 catch (IOException ex)
                 {
-                    _logger.ErrorException("Error updating {0}", ex, package.name);
+                    _logger.ErrorException("Error updating {0}", ex, i.name);
                 }
 
                 // Update progress
@@ -105,7 +106,11 @@ namespace Emby.Server.Implementations.ScheduledTasks
 
                     progress.Report(90 * percent + 10);
                 }
-            }
+            }));
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await Task.WhenAll(tasks).ConfigureAwait(false);
 
             progress.Report(100);
         }
@@ -132,11 +137,5 @@ namespace Emby.Server.Implementations.ScheduledTasks
         {
             get { return "Application"; }
         }
-
-        public bool IsHidden => true;
-
-        public bool IsEnabled => true;
-
-        public bool IsLogged => true;
     }
 }

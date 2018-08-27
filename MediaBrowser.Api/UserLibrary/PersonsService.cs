@@ -7,8 +7,6 @@ using MediaBrowser.Model.Dto;
 using System.Collections.Generic;
 using System.Linq;
 using MediaBrowser.Model.Services;
-using System;
-using MediaBrowser.Model.Querying;
 
 namespace MediaBrowser.Api.UserLibrary
 {
@@ -69,8 +67,8 @@ namespace MediaBrowser.Api.UserLibrary
             var dtoOptions = GetDtoOptions(AuthorizationContext, request);
 
             var item = GetPerson(request.Name, LibraryManager, dtoOptions);
-
-            if (!request.UserId.Equals(Guid.Empty))
+            
+            if (!string.IsNullOrWhiteSpace(request.UserId))
             {
                 var user = UserManager.GetUserById(request.UserId);
 
@@ -87,7 +85,9 @@ namespace MediaBrowser.Api.UserLibrary
         /// <returns>System.Object.</returns>
         public object Get(GetPersons request)
         {
-            return GetResultSlim(request);
+            var result = GetResult(request);
+
+            return ToOptimizedSerializedResultUsingCache(result);
         }
 
         /// <summary>
@@ -98,27 +98,48 @@ namespace MediaBrowser.Api.UserLibrary
         /// <returns>IEnumerable{Tuple{System.StringFunc{System.Int32}}}.</returns>
         protected override IEnumerable<BaseItem> GetAllItems(GetItemsByName request, IList<BaseItem> items)
         {
-            throw new NotImplementedException();
+            var inputPersonTypes = ((GetPersons)request).PersonTypes;
+            var personTypes = string.IsNullOrEmpty(inputPersonTypes) ? new string[] { } : inputPersonTypes.Split(',');
+
+            // Either get all people, or all people filtered by a specific person type
+            var allPeople = GetAllPeople(items, personTypes);
+
+            return allPeople
+                .Select(i => i.Name)
+                .DistinctNames()
+
+                .Select(name =>
+                {
+                    try
+                    {
+                        return LibraryManager.GetPerson(name);
+                    }
+                    catch
+                    {
+                        return null;
+                        // Already logged at lower levels
+                    }
+                }
+
+            ).Where(i => i != null);
         }
 
-        protected override QueryResult<Tuple<BaseItem, ItemCounts>> GetItems(GetItemsByName request, InternalItemsQuery query)
+        /// <summary>
+        /// Gets all people.
+        /// </summary>
+        /// <param name="itemsList">The items list.</param>
+        /// <param name="personTypes">The person types.</param>
+        /// <returns>IEnumerable{PersonInfo}.</returns>
+        private IEnumerable<PersonInfo> GetAllPeople(IList<BaseItem> itemsList, string[] personTypes)
         {
-            var items = LibraryManager.GetPeopleItems(new InternalPeopleQuery
+            var allIds = itemsList.Select(i => i.Id).ToArray();
+
+            var allPeople = LibraryManager.GetPeople(new InternalPeopleQuery
             {
-                PersonTypes = query.PersonTypes,
-                NameContains = query.NameContains ?? query.SearchTerm
+                PersonTypes = personTypes
             });
 
-            if (query.IsFavorite ?? false && query.User != null)
-            {
-                items = items.Where(i => UserDataRepository.GetUserData(query.User, i).IsFavorite).ToList();
-            }
-
-            return new QueryResult<Tuple<BaseItem, ItemCounts>>
-            {
-                TotalRecordCount = items.Count,
-                Items = items.Take(query.Limit ?? int.MaxValue).Select(i => new Tuple<BaseItem, ItemCounts>(i, new ItemCounts())).ToArray()
-            };
+            return allPeople.Where(i => allIds.Contains(i.ItemId)).OrderBy(p => p.SortOrder ?? int.MaxValue).ThenBy(p => p.Type);
         }
 
         public PersonsService(IUserManager userManager, ILibraryManager libraryManager, IUserDataManager userDataRepository, IItemRepository itemRepository, IDtoService dtoService, IAuthorizationContext authorizationContext) : base(userManager, libraryManager, userDataRepository, itemRepository, dtoService, authorizationContext)

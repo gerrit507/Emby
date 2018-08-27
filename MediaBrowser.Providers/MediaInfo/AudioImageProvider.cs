@@ -135,18 +135,9 @@ namespace MediaBrowser.Providers.MediaInfo
 
         public bool Supports(BaseItem item)
         {
-            if (item.IsShortcut)
-            {
-                return false;
-            }
-            if (!item.IsFileProtocol)
-            {
-                return false;
-            }
-
             var audio = item as Audio;
 
-            return audio != null;
+            return item.IsFileProtocol && audio != null;
         }
     }
 }

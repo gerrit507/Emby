@@ -251,7 +251,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
             {
                 var tmdbId = xml.Substring(index + srch.Length).TrimEnd('/').Split('-')[0];
                 int value;
-                if (!string.IsNullOrWhiteSpace(tmdbId) && int.TryParse(tmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+                if (!string.IsNullOrWhiteSpace(tmdbId) && int.TryParse(tmdbId, NumberStyles.Any, CultureInfo.InvariantCulture, out value))
                 {
                     item.SetProviderId(MetadataProviders.Tmdb, value.ToString(_usCulture));
                 }
@@ -267,7 +267,7 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                 {
                     var tvdbId = xml.Substring(index + srch.Length).TrimEnd('/');
                     int value;
-                    if (!string.IsNullOrWhiteSpace(tvdbId) && int.TryParse(tvdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out value))
+                    if (!string.IsNullOrWhiteSpace(tvdbId) && int.TryParse(tvdbId, NumberStyles.Any, CultureInfo.InvariantCulture, out value))
                     {
                         item.SetProviderId(MetadataProviders.Tvdb, value.ToString(_usCulture));
                     }
@@ -592,11 +592,15 @@ namespace MediaBrowser.XbmcMetadata.Parsers
                     {
                         var val = reader.ReadElementContentAsString();
 
-                        if (!string.IsNullOrWhiteSpace(val))
+                        var hasTrailer = item as IHasTrailers;
+                        if (hasTrailer != null)
                         {
-                            val = val.Replace("plugin://plugin.video.youtube/?action=play_video&videoid=", BaseNfoSaver.YouTubeWatchUrl, StringComparison.OrdinalIgnoreCase);
+                            if (!string.IsNullOrWhiteSpace(val))
+                            {
+                                val = val.Replace("plugin://plugin.video.youtube/?action=play_video&videoid=", BaseNfoSaver.YouTubeWatchUrl, StringComparison.OrdinalIgnoreCase);
 
-                            item.AddTrailerUrl(val);
+                                hasTrailer.AddTrailerUrl(val);
+                            }
                         }
                         break;
                     }

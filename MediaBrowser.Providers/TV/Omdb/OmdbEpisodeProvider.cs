@@ -12,7 +12,8 @@ using MediaBrowser.Providers.Omdb;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Common;
+
+using MediaBrowser.Controller.IO;
 
 namespace MediaBrowser.Providers.TV
 {
@@ -25,16 +26,14 @@ namespace MediaBrowser.Providers.TV
         private readonly OmdbItemProvider _itemProvider;
         private readonly IFileSystem _fileSystem;
         private readonly IServerConfigurationManager _configurationManager;
-        private readonly IApplicationHost _appHost;
 
-        public OmdbEpisodeProvider(IJsonSerializer jsonSerializer, IApplicationHost appHost, IHttpClient httpClient, ILogger logger, ILibraryManager libraryManager, IFileSystem fileSystem, IServerConfigurationManager configurationManager)
+        public OmdbEpisodeProvider(IJsonSerializer jsonSerializer, IHttpClient httpClient, ILogger logger, ILibraryManager libraryManager, IFileSystem fileSystem, IServerConfigurationManager configurationManager)
         {
             _jsonSerializer = jsonSerializer;
             _httpClient = httpClient;
             _fileSystem = fileSystem;
             _configurationManager = configurationManager;
-            _appHost = appHost;
-            _itemProvider = new OmdbItemProvider(jsonSerializer, _appHost, httpClient, logger, libraryManager, fileSystem, configurationManager);
+            _itemProvider = new OmdbItemProvider(jsonSerializer, httpClient, logger, libraryManager, fileSystem, configurationManager);
         }
 
         public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(EpisodeInfo searchInfo, CancellationToken cancellationToken)
@@ -61,7 +60,7 @@ namespace MediaBrowser.Providers.TV
             {
                 if (info.IndexNumber.HasValue && info.ParentIndexNumber.HasValue)
                 {
-                    result.HasMetadata = await new OmdbProvider(_jsonSerializer, _httpClient, _fileSystem, _appHost, _configurationManager)
+                    result.HasMetadata = await new OmdbProvider(_jsonSerializer, _httpClient, _fileSystem, _configurationManager)
                         .FetchEpisodeData(result, info.IndexNumber.Value, info.ParentIndexNumber.Value, info.GetProviderId(MetadataProviders.Imdb), seriesImdbId, info.MetadataLanguage, info.MetadataCountryCode, cancellationToken).ConfigureAwait(false);
                 }
             }

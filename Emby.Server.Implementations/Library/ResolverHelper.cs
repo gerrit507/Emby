@@ -162,14 +162,7 @@ namespace Emby.Server.Implementations.Library
                 // directoryService.getFile may return null
                 if (info != null)
                 {
-                    var dateCreated = fileSystem.GetCreationTimeUtc(info);
-
-                    if (dateCreated.Equals(DateTime.MinValue))
-                    {
-                        dateCreated = DateTime.UtcNow;
-                    }
-
-                    item.DateCreated = dateCreated;
+                    item.DateCreated = fileSystem.GetCreationTimeUtc(info);
                 }
             }
             else

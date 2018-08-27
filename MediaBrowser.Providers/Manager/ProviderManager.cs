@@ -314,17 +314,17 @@ namespace MediaBrowser.Providers.Manager
         {
             var globalMetadataOptions = GetMetadataOptions(item);
 
-            return GetMetadataProvidersInternal<T>(item, libraryOptions, globalMetadataOptions, false, false);
+            return GetMetadataProvidersInternal<T>(item, libraryOptions, globalMetadataOptions, false, false, true);
         }
 
-        private IEnumerable<IMetadataProvider<T>> GetMetadataProvidersInternal<T>(BaseItem item, LibraryOptions libraryOptions, MetadataOptions globalMetadataOptions, bool includeDisabled, bool forceEnableInternetMetadata)
+        private IEnumerable<IMetadataProvider<T>> GetMetadataProvidersInternal<T>(BaseItem item, LibraryOptions libraryOptions, MetadataOptions globalMetadataOptions, bool includeDisabled, bool forceEnableInternetMetadata, bool checkIsOwnedItem)
             where T : BaseItem
         {
             // Avoid implicitly captured closure
             var currentOptions = globalMetadataOptions;
 
             return _metadataProviders.OfType<IMetadataProvider<T>>()
-                .Where(i => CanRefresh(i, item, libraryOptions, currentOptions, includeDisabled, forceEnableInternetMetadata))
+                .Where(i => CanRefresh(i, item, libraryOptions, currentOptions, includeDisabled, forceEnableInternetMetadata, checkIsOwnedItem))
                 .OrderBy(i => GetConfiguredOrder(item, i, libraryOptions, globalMetadataOptions))
                 .ThenBy(GetDefaultOrder);
         }
@@ -337,7 +337,7 @@ namespace MediaBrowser.Providers.Manager
             return GetImageProviders(item, libraryOptions, options, new ImageRefreshOptions(new DirectoryService(_logger, _fileSystem)), includeDisabled).OfType<IRemoteImageProvider>();
         }
 
-        private bool CanRefresh(IMetadataProvider provider, BaseItem item, LibraryOptions libraryOptions, MetadataOptions options, bool includeDisabled, bool forceEnableInternetMetadata)
+        private bool CanRefresh(IMetadataProvider provider, BaseItem item, LibraryOptions libraryOptions, MetadataOptions options, bool includeDisabled, bool forceEnableInternetMetadata, bool checkIsOwnedItem)
         {
             if (!includeDisabled)
             {
@@ -362,7 +362,7 @@ namespace MediaBrowser.Providers.Manager
             }
 
             // If this restriction is ever lifted, movie xml providers will have to be updated to prevent owned items like trailers from reading those files
-            if (!item.OwnerId.Equals(Guid.Empty))
+            if (checkIsOwnedItem && item.IsOwnedItem)
             {
                 if (provider is ILocalMetadataProvider || provider is IRemoteMetadataProvider)
                 {
@@ -550,7 +550,7 @@ namespace MediaBrowser.Providers.Manager
         private void AddMetadataPlugins<T>(List<MetadataPlugin> list, T item, LibraryOptions libraryOptions, MetadataOptions options)
             where T : BaseItem
         {
-            var providers = GetMetadataProvidersInternal<T>(item, libraryOptions, options, true, true).ToList();
+            var providers = GetMetadataProvidersInternal<T>(item, libraryOptions, options, true, false, false).ToList();
 
             // Locals
             list.AddRange(providers.Where(i => (i is ILocalMetadataProvider)).Select(i => new MetadataPlugin
@@ -756,7 +756,7 @@ namespace MediaBrowser.Providers.Manager
             var options = GetMetadataOptions(dummy);
             var libraryOptions = new LibraryOptions();
 
-            var providers = GetMetadataProvidersInternal<TItemType>(referenceItem, libraryOptions, options, searchInfo.IncludeDisabledProviders, false)
+            var providers = GetMetadataProvidersInternal<TItemType>(dummy, libraryOptions, options, searchInfo.IncludeDisabledProviders, false, false)
                 .OfType<IRemoteSearchProvider<TLookupType>>();
 
             if (!string.IsNullOrEmpty(searchInfo.SearchProviderName))

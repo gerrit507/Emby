@@ -52,7 +52,7 @@ namespace Emby.Server.Implementations.EntryPoints
         /// <summary>
         /// The library update duration
         /// </summary>
-        private const int LibraryUpdateDuration = 30000;
+        private const int LibraryUpdateDuration = 5000;
 
         private readonly IProviderManager _providerManager;
 
@@ -468,14 +468,10 @@ namespace Emby.Server.Implementations.EntryPoints
                     LibraryUpdateTimer.Dispose();
                     LibraryUpdateTimer = null;
                 }
-                
+
                 _libraryManager.ItemAdded -= libraryManager_ItemAdded;
                 _libraryManager.ItemUpdated -= libraryManager_ItemUpdated;
                 _libraryManager.ItemRemoved -= libraryManager_ItemRemoved;
-
-                _providerManager.RefreshCompleted -= _providerManager_RefreshCompleted;
-                _providerManager.RefreshStarted -= _providerManager_RefreshStarted;
-                _providerManager.RefreshProgress -= _providerManager_RefreshProgress;
             }
         }
     }

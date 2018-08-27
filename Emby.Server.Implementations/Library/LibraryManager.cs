@@ -2643,11 +2643,12 @@ namespace Emby.Server.Implementations.Library
                     {
                         video = dbItem;
                     }
-
-                    video.ParentId = Guid.Empty;
-                    video.OwnerId = owner.Id;
-                    video.ExtraType = ExtraType.Trailer;
-                    video.TrailerTypes = new [] { TrailerType.LocalTrailer };
+                    else
+                    {
+                        // item is new
+                        video.ExtraType = ExtraType.Trailer;
+                    }
+                    video.TrailerTypes = new List<TrailerType> { TrailerType.LocalTrailer };
 
                     return video;
 
@@ -2688,9 +2689,6 @@ namespace Emby.Server.Implementations.Library
                     {
                         video = dbItem;
                     }
-
-                    video.ParentId = Guid.Empty;
-                    video.OwnerId = owner.Id;
 
                     SetExtraTypeFromFilename(video);
 

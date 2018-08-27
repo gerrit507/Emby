@@ -130,9 +130,7 @@ namespace MediaBrowser.Api.UserLibrary
                 PersonTypes = request.GetPersonTypes(),
                 Years = request.GetYears(),
                 MinCommunityRating = request.MinCommunityRating,
-                DtoOptions = dtoOptions,
-                SearchTerm = request.SearchTerm,
-                EnableTotalRecordCount = request.EnableTotalRecordCount
+                DtoOptions = dtoOptions
             };
 
             if (!string.IsNullOrWhiteSpace(request.ParentId))
@@ -202,7 +200,13 @@ namespace MediaBrowser.Api.UserLibrary
             var syncProgess = DtoService.GetSyncedItemProgress(dtoOptions);
             var dtos = result.Items.Select(i =>
             {
-                return DtoService.GetItemByNameDto(i.Item1, dtoOptions, user);
+                var dto = DtoService.GetItemByNameDto(i.Item1, dtoOptions, null, syncProgess, user);
+
+                if (!string.IsNullOrWhiteSpace(request.IncludeItemTypes))
+                {
+                    SetItemCounts(dto, i.Item2);
+                }
+                return dto;
             });
 
             return new QueryResult<BaseItemDto>
@@ -215,6 +219,20 @@ namespace MediaBrowser.Api.UserLibrary
         protected virtual QueryResult<Tuple<BaseItem, ItemCounts>> GetItems(GetItemsByName request, InternalItemsQuery query)
         {
             return new QueryResult<Tuple<BaseItem, ItemCounts>>();
+        }
+
+        private void SetItemCounts(BaseItemDto dto, ItemCounts counts)
+        {
+            dto.ChildCount = counts.ItemCount;
+            dto.ProgramCount = counts.ProgramCount;
+            dto.SeriesCount = counts.SeriesCount;
+            dto.EpisodeCount = counts.EpisodeCount;
+            dto.MovieCount = counts.MovieCount;
+            dto.TrailerCount = counts.TrailerCount;
+            dto.AlbumCount = counts.AlbumCount;
+            dto.SongCount = counts.SongCount;
+            dto.GameCount = counts.GameCount;
+            dto.ArtistCount = counts.ArtistCount;
         }
 
         /// <summary>
@@ -279,7 +297,9 @@ namespace MediaBrowser.Api.UserLibrary
 
             var extractedItems = GetAllItems(request, items);
 
-            var filteredItems = LibraryManager.Sort(extractedItems, user, request.GetOrderBy());
+            var filteredItems = FilterItems(request, extractedItems, user);
+
+            filteredItems = LibraryManager.Sort(filteredItems, user, request.GetOrderBy());
 
             var ibnItemsArray = filteredItems.ToList();
 
@@ -304,12 +324,130 @@ namespace MediaBrowser.Api.UserLibrary
 
             }
 
-            var dtos = ibnItems.Select(i => DtoService.GetItemByNameDto(i, dtoOptions, user));
+            var tuples = ibnItems.Select(i => new Tuple<BaseItem, List<BaseItem>>(i, new List<BaseItem>()));
+
+            var syncProgess = DtoService.GetSyncedItemProgress(dtoOptions);
+            var dtos = tuples.Select(i => DtoService.GetItemByNameDto(i.Item1, dtoOptions, i.Item2, syncProgess, user));
 
             result.Items = dtos.Where(i => i != null).ToArray();
 
             return result;
         }
+
+        /// <summary>
+        /// Filters the items.
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <param name="items">The items.</param>
+        /// <param name="user">The user.</param>
+        /// <returns>IEnumerable{`0}.</returns>
+        private IEnumerable<BaseItem> FilterItems(GetItemsByName request, IEnumerable<BaseItem> items, User user)
+        {
+            if (!string.IsNullOrEmpty(request.NameStartsWithOrGreater))
+            {
+                items = items.Where(i => string.Compare(request.NameStartsWithOrGreater, i.SortName, StringComparison.CurrentCultureIgnoreCase) < 1);
+            }
+
+            if (!string.IsNullOrEmpty(request.NameLessThan))
+            {
+                items = items.Where(i => string.Compare(request.NameLessThan, i.SortName, StringComparison.CurrentCultureIgnoreCase) == 1);
+            }
+
+            var imageTypes = request.GetImageTypes();
+            if (imageTypes.Length > 0)
+            {
+                items = items.Where(item => imageTypes.Any(item.HasImage));
+            }
+
+            var filters = request.GetFilters();
+
+            if (filters.Contains(ItemFilter.Dislikes))
+            {
+                items = items.Where(i =>
+                    {
+                        var userdata = UserDataRepository.GetUserData(user, i);
+
+                        return userdata != null && userdata.Likes.HasValue && !userdata.Likes.Value;
+                    });
+            }
+
+            if (filters.Contains(ItemFilter.Likes))
+            {
+                items = items.Where(i =>
+                {
+                    var userdata = UserDataRepository.GetUserData(user, i);
+
+                    return userdata != null && userdata.Likes.HasValue && userdata.Likes.Value;
+                });
+            }
+
+            if (filters.Contains(ItemFilter.IsFavoriteOrLikes))
+            {
+                items = items.Where(i =>
+                {
+                    var userdata = UserDataRepository.GetUserData(user, i);
+
+                    var likes = userdata.Likes ?? false;
+                    var favorite = userdata.IsFavorite;
+
+                    return likes || favorite;
+                });
+            }
+
+            if (filters.Contains(ItemFilter.IsFavorite))
+            {
+                items = items.Where(i =>
+                {
+                    var userdata = UserDataRepository.GetUserData(user, i);
+
+                    return userdata != null && userdata.IsFavorite;
+                });
+            }
+
+            // Avoid implicitly captured closure
+            var currentRequest = request;
+            return items.Where(i => ApplyAdditionalFilters(currentRequest, i, user, false));
+        }
+
+        private bool ApplyAdditionalFilters(BaseItemsRequest request, BaseItem i, User user, bool isPreFiltered)
+        {
+            if (!isPreFiltered)
+            {
+                // Apply tag filter
+                var tags = request.GetTags();
+                if (tags.Length > 0)
+                {
+                    if (!tags.Any(v => i.Tags.Contains(v, StringComparer.OrdinalIgnoreCase)))
+                    {
+                        return false;
+                    }
+                }
+
+                // Apply official rating filter
+                var officialRatings = request.GetOfficialRatings();
+                if (officialRatings.Length > 0 && !officialRatings.Contains(i.OfficialRating ?? string.Empty))
+                {
+                    return false;
+                }
+
+                // Apply genre filter
+                var genres = request.GetGenres();
+                if (genres.Length > 0 && !genres.Any(v => i.Genres.Contains(v, StringComparer.OrdinalIgnoreCase)))
+                {
+                    return false;
+                }
+
+                // Apply year filter
+                var years = request.GetYears();
+                if (years.Length > 0 && !(i.ProductionYear.HasValue && years.Contains(i.ProductionYear.Value)))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
 
         /// <summary>
         /// Filters the items.

@@ -6,6 +6,7 @@ using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Querying;
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Emby.Server.Implementations.Activity
 {
@@ -26,6 +27,7 @@ namespace Emby.Server.Implementations.Activity
 
         public void Create(ActivityLogEntry entry)
         {
+            entry.Id = Guid.NewGuid().ToString("N");
             entry.Date = DateTime.UtcNow;
 
             _repo.Create(entry);
@@ -33,11 +35,11 @@ namespace Emby.Server.Implementations.Activity
             EventHelper.FireEventIfNotNull(EntryCreated, this, new GenericEventArgs<ActivityLogEntry>(entry), _logger);
         }
 
-        public QueryResult<ActivityLogEntry> GetActivityLogEntries(DateTime? minDate, bool? hasUserId, int? startIndex, int? limit)
+        public QueryResult<ActivityLogEntry> GetActivityLogEntries(DateTime? minDate, int? startIndex, int? limit)
         {
-            var result = _repo.GetActivityLogEntries(minDate, hasUserId, startIndex, limit);
+            var result = _repo.GetActivityLogEntries(minDate, startIndex, limit);
 
-            foreach (var item in result.Items.Where(i => !i.UserId.Equals(Guid.Empty)))
+            foreach (var item in result.Items.Where(i => !string.IsNullOrEmpty(i.UserId)))
             {
                 var user = _userManager.GetUserById(item.UserId);
 
@@ -49,11 +51,6 @@ namespace Emby.Server.Implementations.Activity
             }
 
             return result;
-        }
-
-        public QueryResult<ActivityLogEntry> GetActivityLogEntries(DateTime? minDate, int? startIndex, int? limit)
-        {
-            return GetActivityLogEntries(minDate, null, startIndex, limit);
         }
     }
 }

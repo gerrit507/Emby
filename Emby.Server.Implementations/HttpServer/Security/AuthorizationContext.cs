@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using MediaBrowser.Model.Services;
 using System.Linq;
 using System.Threading;
-using MediaBrowser.Controller.Library;
 
 namespace Emby.Server.Implementations.HttpServer.Security
 {
@@ -14,13 +13,11 @@ namespace Emby.Server.Implementations.HttpServer.Security
     {
         private readonly IAuthenticationRepository _authRepo;
         private readonly IConnectManager _connectManager;
-        private readonly IUserManager _userManager;
 
-        public AuthorizationContext(IAuthenticationRepository authRepo, IConnectManager connectManager, IUserManager userManager)
+        public AuthorizationContext(IAuthenticationRepository authRepo, IConnectManager connectManager)
         {
             _authRepo = authRepo;
             _connectManager = connectManager;
-            _userManager = userManager;
         }
 
         public AuthorizationInfo GetAuthorizationInfo(object requestContext)
@@ -97,6 +94,8 @@ namespace Emby.Server.Implementations.HttpServer.Security
 
                 if (tokenInfo != null)
                 {
+                    info.UserId = tokenInfo.UserId;
+
                     var updateToken = false;
 
                     // TODO: Remove these checks for IsNullOrWhiteSpace
@@ -110,21 +109,15 @@ namespace Emby.Server.Implementations.HttpServer.Security
                         info.DeviceId = tokenInfo.DeviceId;
                     }
 
-                    // Temporary. TODO - allow clients to specify that the token has been shared with a casting device
-                    var allowTokenInfoUpdate = info.Client == null || info.Client.IndexOf("chromecast", StringComparison.OrdinalIgnoreCase) == -1;
 
                     if (string.IsNullOrWhiteSpace(info.Device))
                     {
                         info.Device = tokenInfo.DeviceName;
                     }
-                    
                     else if (!string.Equals(info.Device, tokenInfo.DeviceName, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (allowTokenInfoUpdate)
-                        {
-                            updateToken = true;
-                            tokenInfo.DeviceName = info.Device;
-                        }
+                        updateToken = true;
+                        tokenInfo.DeviceName = info.Device;
                     }
 
                     if (string.IsNullOrWhiteSpace(info.Version))
@@ -133,38 +126,22 @@ namespace Emby.Server.Implementations.HttpServer.Security
                     }
                     else if (!string.Equals(info.Version, tokenInfo.AppVersion, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (allowTokenInfoUpdate)
-                        {
-                            updateToken = true;
-                            tokenInfo.AppVersion = info.Version;
-                        }
-                    }
-
-                    if ((DateTime.UtcNow - tokenInfo.DateLastActivity).TotalMinutes > 3)
-                    {
-                        tokenInfo.DateLastActivity = DateTime.UtcNow;
                         updateToken = true;
-                    }
-
-                    if (!tokenInfo.UserId.Equals(Guid.Empty))
-                    {
-                        info.User = _userManager.GetUserById(tokenInfo.UserId);
-
-                        if (info.User != null && !string.Equals(info.User.Name, tokenInfo.UserName, StringComparison.OrdinalIgnoreCase))
-                        {
-                            tokenInfo.UserName = info.User.Name;
-                            updateToken = true;
-                        }
+                        tokenInfo.AppVersion = info.Version;
                     }
 
                     if (updateToken)
                     {
-                        _authRepo.Update(tokenInfo);
+                        _authRepo.Update(tokenInfo, CancellationToken.None);
                     }
                 }
                 else
                 {
-                    info.User = _connectManager.GetUserFromExchangeToken(token);
+                    var user = _connectManager.GetUserFromExchangeToken(token);
+                    if (user != null)
+                    {
+                        info.UserId = user.Id.ToString("N");
+                    }
                 }
                 httpReq.Items["OriginalAuthenticationInfo"] = tokenInfo;
             }

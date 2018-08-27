@@ -33,6 +33,11 @@ namespace MediaBrowser.Server.Mono
             return new ConnectManager();
         }
 
+        protected override ISyncManager CreateSyncManager()
+        {
+            return new SyncManager();
+        }
+
         protected override void RestartInternal()
         {
             MainClass.Restart();
